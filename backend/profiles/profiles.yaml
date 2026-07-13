@@ -1,0 +1,5 @@
+- bartender:
+    prompt: profiles/bartender.md
+    description: ""
+    tip: ""
+    teacher_context: true
