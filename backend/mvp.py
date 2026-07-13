@@ -1,4 +1,3 @@
-import os
 #!/usr/bin/env python3
 """
 Conversational loop: you type → LLM replies via streaming → TTS speaks in real time.
@@ -13,6 +12,7 @@ Dependencies:
 """
 
 import json
+import os
 import time
 import threading
 import queue
