@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="dark">
+	<head>
+		<meta charset="UTF-8" />
+		<title>Dostoevsky — design tokens</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link
+			href="https://fonts.googleapis.com/css2?family=PT+Serif:ital,wght@0,400;0,700;1,400;1,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+			rel="stylesheet"
+		/>
+		<style>
+			/* ===== TOKENS (ver tokens.css para a versão comentada/completa) ===== */
+			:root {
+				--raw-ink-950: #10151a;
+				--raw-ink-900: #161c22;
+				--raw-ink-800: #1b2229;
+				--raw-ink-700: #262f37;
+				--raw-ink-600: #333e47;
+				--raw-slate-500: #5b6771;
+				--raw-slate-400: #7c8791;
+				--raw-slate-300: #a3acb4;
+				--raw-paper-50: #faf7f0;
+				--raw-paper-100: #ede6d6;
+				--raw-paper-300: #d8cdb0;
+				--raw-gilt-400: #d9ae55;
+				--raw-gilt-500: #c89b3c;
+				--raw-gilt-600: #a67d2a;
+				--raw-oxblood-400: #a3524f;
+				--raw-oxblood-500: #8c3b3b;
+				--raw-oxblood-600: #6e2b2b;
+				--raw-verdigris-400: #6b9686;
+				--raw-verdigris-500: #4f7a6c;
+				--raw-verdigris-600: #3b5f53;
+
+				--color-bg: var(--raw-ink-950);
+				--color-bg-inset: var(--raw-ink-900);
+				--color-surface: var(--raw-ink-800);
+				--color-surface-raised: var(--raw-ink-700);
+				--color-border: var(--raw-ink-600);
+				--color-border-strong: var(--raw-slate-500);
+				--color-text-primary: var(--raw-paper-100);
+				--color-text-secondary: var(--raw-paper-300);
+				--color-text-muted: var(--raw-slate-400);
+				--color-accent: var(--raw-gilt-500);
+				--color-accent-hover: var(--raw-gilt-400);
+				--color-voice-user: var(--raw-oxblood-500);
+				--color-voice-ai: var(--raw-verdigris-500);
+
+				--font-display: 'PT Serif', Georgia, serif;
+				--font-body: 'IBM Plex Sans', -apple-system, sans-serif;
+				--font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+				--space-1: 4px;
+				--space-2: 8px;
+				--space-3: 12px;
+				--space-4: 16px;
+				--space-5: 24px;
+				--space-6: 32px;
+				--space-7: 48px;
+				--space-8: 64px;
+				--radius-sm: 2px;
+				--radius-md: 4px;
+				--radius-lg: 6px;
+				--radius-pill: 999px;
+			}
+
+			* {
+				box-sizing: border-box;
+			}
+			body {
+				margin: 0;
+				background: var(--color-bg);
+				color: var(--color-text-primary);
+				font: 400 1rem/1.55 var(--font-body);
+				-webkit-font-smoothing: antialiased;
+			}
+			.wrap {
+				max-width: 1040px;
+				margin: 0 auto;
+				padding: var(--space-8) var(--space-5) var(--space-8);
+			}
+			section {
+				margin-bottom: var(--space-8);
+			}
+			.eyebrow {
+				font: 500 0.75rem/1.4 var(--font-body);
+				letter-spacing: 0.14em;
+				text-transform: uppercase;
+				color: var(--color-accent);
+				margin: 0 0 var(--space-2);
+			}
+			h1 {
+				font: 700 clamp(2.5rem, 2rem+2vw, 3.75rem)/1.02 var(--font-display);
+				margin: 0 0 var(--space-2);
+				letter-spacing: -0.01em;
+			}
+			h2 {
+				font: 700 1.5rem/1.2 var(--font-display);
+				margin: 0 0 var(--space-4);
+				border-bottom: 1px solid var(--color-border);
+				padding-bottom: var(--space-3);
+			}
+			p {
+				color: var(--color-text-secondary);
+				max-width: 60ch;
+			}
+			.lede {
+				font: 400 1.125rem/1.6 var(--font-body);
+				color: var(--color-text-secondary);
+				max-width: 56ch;
+			}
+			code {
+				font-family: var(--font-mono);
+				font-size: 0.85em;
+				color: var(--raw-gilt-400);
+				background: var(--color-bg-inset);
+				padding: 0.1em 0.4em;
+				border-radius: var(--radius-sm);
+			}
+
+			/* header */
+			.masthead {
+				border-bottom: 1px solid var(--color-border);
+				padding-bottom: var(--space-6);
+				margin-bottom: var(--space-8);
+			}
+			.wordmark {
+				display: flex;
+				align-items: baseline;
+				gap: var(--space-3);
+				margin-bottom: var(--space-5);
+			}
+			.wordmark .mark {
+				font: 700 1.25rem/1 var(--font-display);
+				color: var(--color-accent);
+				letter-spacing: 0.02em;
+			}
+			.wordmark .rule {
+				flex: 1;
+				height: 1px;
+				background: var(--color-border);
+			}
+			.wordmark .cyr {
+				font: 400 italic 1rem var(--font-display);
+				color: var(--color-text-muted);
+			}
+
+			/* color swatches */
+			.swatch-grid {
+				display: grid;
+				grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+				gap: var(--space-3);
+			}
+			.swatch {
+				border: 1px solid var(--color-border);
+				border-radius: var(--radius-lg);
+				overflow: hidden;
+				background: var(--color-surface);
+			}
+			.swatch .chip {
+				height: 88px;
+			}
+			.swatch .meta {
+				padding: var(--space-3) var(--space-4);
+			}
+			.swatch .name {
+				font: 600 0.9375rem var(--font-body);
+				margin: 0 0 2px;
+			}
+			.swatch .hex {
+				font: 400 0.8125rem var(--font-mono);
+				color: var(--color-text-muted);
+				margin: 0 0 var(--space-2);
+			}
+			.swatch .use {
+				font: 400 0.8125rem/1.4 var(--font-body);
+				color: var(--color-text-secondary);
+				margin: 0;
+			}
+
+			/* type scale */
+			.type-row {
+				display: flex;
+				align-items: baseline;
+				gap: var(--space-5);
+				padding: var(--space-4) 0;
+				border-bottom: 1px solid var(--color-border);
+			}
+			.type-row:last-child {
+				border-bottom: none;
+			}
+			.type-label {
+				width: 140px;
+				flex-shrink: 0;
+				font: 500 0.75rem var(--font-mono);
+				color: var(--color-text-muted);
+			}
+			.type-sample-display {
+				font: 700 2rem var(--font-display);
+			}
+			.type-sample-heading {
+				font: 600 1.25rem var(--font-body);
+			}
+			.type-sample-body {
+				font: 400 1rem/1.5 var(--font-body);
+				color: var(--color-text-secondary);
+			}
+			.type-sample-caption {
+				font: 500 0.75rem var(--font-body);
+				letter-spacing: 0.06em;
+				text-transform: uppercase;
+				color: var(--color-text-muted);
+			}
+			.type-sample-mono {
+				font: 400 0.875rem var(--font-mono);
+				color: var(--raw-gilt-400);
+			}
+
+			/* ===== signature: dialogue ledger mockup ===== */
+			.session {
+				display: grid;
+				grid-template-columns: 200px 1fr;
+				gap: 0;
+				border: 1px solid var(--color-border);
+				border-radius: var(--radius-lg);
+				background: var(--color-surface);
+				overflow: hidden;
+			}
+			.session-nav {
+				border-right: 1px solid var(--color-border);
+				padding: var(--space-5) var(--space-4);
+				background: var(--color-bg-inset);
+			}
+			.session-nav .num {
+				font: 400 italic 0.8125rem var(--font-display);
+				color: var(--color-text-muted);
+				display: block;
+				margin-bottom: var(--space-1);
+			}
+			.session-nav .item {
+				padding: var(--space-2) 0;
+				font: 400 0.875rem var(--font-body);
+				color: var(--color-text-muted);
+				border-left: 2px solid transparent;
+				padding-left: var(--space-3);
+				margin-left: -var(--space-3);
+			}
+			.session-nav .item.active {
+				color: var(--color-text-primary);
+				border-left-color: var(--color-accent);
+				font-weight: 600;
+			}
+			.session-main {
+				padding: var(--space-5) var(--space-6);
+			}
+			.session-title {
+				font: 400 italic 0.8125rem var(--font-display);
+				color: var(--color-text-muted);
+				margin-bottom: var(--space-5);
+			}
+
+			.line {
+				margin-bottom: var(--space-5);
+			}
+			.speaker {
+				font: 700 0.75rem var(--font-body);
+				letter-spacing: 0.1em;
+				text-transform: uppercase;
+				margin-bottom: var(--space-2);
+				display: flex;
+				align-items: center;
+				gap: var(--space-2);
+			}
+			.speaker.user {
+				color: var(--color-voice-user);
+			}
+			.speaker.ai {
+				color: var(--color-voice-ai);
+			}
+			.speaker .tag {
+				font: 400 0.6875rem var(--font-mono);
+				text-transform: none;
+				letter-spacing: 0;
+				color: var(--color-text-muted);
+				background: var(--color-bg-inset);
+				padding: 1px 6px;
+				border-radius: var(--radius-sm);
+				border: 1px solid var(--color-border);
+			}
+			.utterance {
+				font: 400 1.0625rem/1.5 var(--font-body);
+				color: var(--color-text-primary);
+				margin: 0 0 var(--space-2);
+				max-width: 52ch;
+			}
+			.utterance .corr {
+				color: var(--color-voice-ai);
+				text-decoration: none;
+				border-bottom: 1px dashed var(--raw-verdigris-500);
+			}
+
+			/* the waveform rule — signature element replacing chat bubbles */
+			.wave {
+				display: flex;
+				align-items: flex-end;
+				gap: 2px;
+				height: 20px;
+			}
+			.wave span {
+				width: 2px;
+				background: var(--color-border-strong);
+				border-radius: 1px;
+			}
+			.line.user .wave span {
+				background: var(--color-voice-user);
+			}
+			.line.ai .wave span {
+				background: var(--color-voice-ai);
+			}
+
+			footer {
+				color: var(--color-text-muted);
+				font: 400 0.8125rem var(--font-body);
+				border-top: 1px solid var(--color-border);
+				padding-top: var(--space-5);
+			}
+		</style>
+	</head>
+	<body>
+		<div class="wrap">
+			<div class="masthead">
+				<div class="wordmark">
+					<span class="mark">DOSTOIEVSK</span>
+					<span class="rule"></span>
+					<span class="cyr">достоевск</span>
+				</div>
+				<h1>Tokens de design</h1>
+				<p class="lede">
+					O ponto de partida: um livro de capa dura russo do século XIX — tinta, papel envelhecido,
+					letras douradas em relevo na lombada, couro, fecho de bronze oxidado. Nada de
+					bege-creme-com-serifa nem dark-mode-com-verde-neon: a materialidade do livro é a paleta.
+				</p>
+			</div>
+
+			<section>
+				<p class="eyebrow">01 — Cor</p>
+				<h2>Seis tons, com origem</h2>
+				<div class="swatch-grid">
+					<div class="swatch">
+						<div class="chip" style="background: var(--raw-ink-950)"></div>
+						<div class="meta">
+							<p class="name">ink</p>
+							<p class="hex">#10151A</p>
+							<p class="use">Fundo primário. A tinta da página.</p>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="chip" style="background: var(--raw-slate-500)"></div>
+						<div class="meta">
+							<p class="name">slate</p>
+							<p class="hex">#5B6771</p>
+							<p class="use">Neutro — bordas, texto secundário. Tinta ferro-gálica desbotada.</p>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="chip" style="background: var(--raw-paper-100)"></div>
+						<div class="meta">
+							<p class="name">paper</p>
+							<p class="hex">#EDE6D6</p>
+							<p class="use">Texto sobre fundo escuro / modo claro. Papel envelhecido.</p>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="chip" style="background: var(--raw-gilt-500)"></div>
+						<div class="meta">
+							<p class="name">gilt</p>
+							<p class="hex">#C89B3C</p>
+							<p class="use">Acento primário — CTAs, foco. Letra dourada da lombada.</p>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="chip" style="background: var(--raw-oxblood-500)"></div>
+						<div class="meta">
+							<p class="name">oxblood</p>
+							<p class="hex">#8C3B3B</p>
+							<p class="use">Sua voz, gravação, alerta. Couro da encadernação.</p>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="chip" style="background: var(--raw-verdigris-500)"></div>
+						<div class="meta">
+							<p class="name">verdigris</p>
+							<p class="hex">#4F7A6C</p>
+							<p class="use">Voz da IA, acerto, progresso. Bronze oxidado do fecho.</p>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<section>
+				<p class="eyebrow">02 — Tipografia</p>
+				<h2>PT Serif · IBM Plex Sans · IBM Plex Mono</h2>
+				<p style="margin-bottom: var(--space-4)">
+					PT Serif foi desenhada pela ParaType especificamente para suportar cirílico — não é um
+					capricho estético, é a fonte certa para um app que vai mostrar russo, e outros alfabetos,
+					lado a lado com latino. IBM Plex cobre o resto: cara de ferramenta técnica self-hosted,
+					não de produto SaaS.
+				</p>
+				<div>
+					<div class="type-row">
+						<span class="type-label">display / xl</span
+						><span class="type-sample-display">Conversação, não conjugação</span>
+					</div>
+					<div class="type-row">
+						<span class="type-label">heading</span
+						><span class="type-sample-heading">Sessão 04 — Pretérito perfeito</span>
+					</div>
+					<div class="type-row">
+						<span class="type-label">body</span
+						><span class="type-sample-body"
+							>O objetivo não é decorar regras, é conseguir sustentar uma conversa de verdade —
+							mesmo com erros.</span
+						>
+					</div>
+					<div class="type-row">
+						<span class="type-label">caption</span
+						><span class="type-sample-caption">Falante · Voz local · Whisper.cpp</span>
+					</div>
+					<div class="type-row">
+						<span class="type-label">mono / dados</span
+						><span class="type-sample-mono">ru-RU · 00:42 · /prʲɪˈvʲet/</span>
+					</div>
+				</div>
+			</section>
+
+			<section>
+				<p class="eyebrow">03 — Elemento de assinatura</p>
+				<h2>A conversa como texto de peça, não como bolha de chat</h2>
+				<p style="margin-bottom: var(--space-5)">
+					Em vez de bolhas de chat genéricas, os turnos de fala seguem a lógica de um roteiro: nome
+					do falante em versalete, a fala, e uma forma de onda fina como régua — não como player
+					flutuante — ligando texto e áudio. Sessões numeram-se como capítulos, porque aqui a ordem
+					é real: cada sessão constrói sobre a anterior.
+				</p>
+
+				<div class="session">
+					<nav class="session-nav">
+						<span class="num">Capítulo</span>
+						<div class="item">01 — Apresentações</div>
+						<div class="item">02 — No mercado</div>
+						<div class="item">03 — Pedir direções</div>
+						<div class="item active">04 — Pretérito perfeito</div>
+						<div class="item">05 — Discordar com educação</div>
+					</nav>
+					<div class="session-main">
+						<div class="session-title">Sessão 04 · русский · 12 min</div>
+
+						<div class="line ai">
+							<div class="speaker">Достоевск <span class="tag">IA · edge-tts</span></div>
+							<p class="utterance">Расскажите, что вы делали вчера вечером.</p>
+							<div class="wave">
+								<span style="height: 6px"></span><span style="height: 14px"></span
+								><span style="height: 9px"></span><span style="height: 18px"></span
+								><span style="height: 7px"></span><span style="height: 12px"></span
+								><span style="height: 5px"></span><span style="height: 16px"></span>
+							</div>
+						</div>
+
+						<div class="line user">
+							<div class="speaker">Você <span class="tag">local · whisper.cpp</span></div>
+							<p class="utterance">
+								Вчера я <a class="corr" href="#" title="forma correta: пошёл">пошел</a> в кино с
+								друзьями.
+							</p>
+							<div class="wave">
+								<span style="height: 10px"></span><span style="height: 5px"></span
+								><span style="height: 15px"></span><span style="height: 8px"></span
+								><span style="height: 11px"></span><span style="height: 4px"></span>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<section>
+				<p class="eyebrow">04 — Espaço &amp; forma</p>
+				<h2>Grid de 4px, cantos quase retos</h2>
+				<p style="margin-bottom: var(--space-4)">
+					Raio pequeno (2–6px) — a app parece um livro impresso, não uma bolha de SaaS. Sem
+					drop-shadow pesado no fundo escuro: só borda de 1px e um realce sutil no topo.
+				</p>
+				<div style="display: flex; gap: var(--space-3); align-items: flex-end; flex-wrap: wrap">
+					<div>
+						<div
+							style="
+								width: 64px;
+								height: 64px;
+								background: var(--color-surface);
+								border: 1px solid var(--color-border);
+								border-radius: var(--radius-sm);
+							"
+						></div>
+						<code style="display: block; margin-top: var(--space-2)">sm 2px</code>
+					</div>
+					<div>
+						<div
+							style="
+								width: 64px;
+								height: 64px;
+								background: var(--color-surface);
+								border: 1px solid var(--color-border);
+								border-radius: var(--radius-md);
+							"
+						></div>
+						<code style="display: block; margin-top: var(--space-2)">md 4px</code>
+					</div>
+					<div>
+						<div
+							style="
+								width: 64px;
+								height: 64px;
+								background: var(--color-surface);
+								border: 1px solid var(--color-border);
+								border-radius: var(--radius-lg);
+							"
+						></div>
+						<code style="display: block; margin-top: var(--space-2)">lg 6px</code>
+					</div>
+					<div>
+						<div
+							style="
+								width: 64px;
+								height: 64px;
+								background: var(--color-accent);
+								border-radius: var(--radius-pill);
+								display: flex;
+								align-items: center;
+								justify-content: center;
+								font: 600 0.75rem var(--font-mono);
+								color: var(--color-bg);
+							"
+						>
+							RU
+						</div>
+						<code style="display: block; margin-top: var(--space-2)">pill</code>
+					</div>
+				</div>
+			</section>
+
+			<footer>
+				Dostoevsky · design tokens v1 · tokens.css e tokens.json disponíveis para uso direto no
+				projeto
+			</footer>
+		</div>
+	</body>
+</html>
