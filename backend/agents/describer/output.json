@@ -1,0 +1,49 @@
+{
+  "type": "json_schema",
+  "json_schema": {
+    "name": "media_description",
+    "strict": true,
+    "schema": {
+      "type": "object",
+      "properties": {
+        "written_description": {
+          "type": "string",
+          "description": "Clear, human-readable summary of the media content."
+        },
+        "embedding_description": {
+          "type": "string",
+          "description": "Dense, keyword-rich description optimized for semantic search and vector embedding retrieval."
+        },
+        "content_type": {
+          "type": "string",
+          "description": "Detected type of the media content (e.g., lecture, article, conversation, podcast, image_description)."
+        },
+        "language": {
+          "type": "string",
+          "description": "Primary language of the content as an ISO 639-1 code or language name (e.g., 'en', 'pt-BR')."
+        },
+        "key_topics": {
+          "type": "array",
+          "description": "Main topics or themes present in the content.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "complexity": {
+          "type": "string",
+          "description": "Estimated complexity level of the content.",
+          "enum": ["beginner", "intermediate", "advanced", "mixed", "unknown"]
+        }
+      },
+      "required": [
+        "written_description",
+        "embedding_description",
+        "content_type",
+        "language",
+        "key_topics",
+        "complexity"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

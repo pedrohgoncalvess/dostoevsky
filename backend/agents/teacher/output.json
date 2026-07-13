@@ -1,0 +1,25 @@
+{
+  "type": "json_schema",
+  "json_schema": {
+    "name": "teacher_response",
+    "strict": true,
+    "schema": {
+      "type": "object",
+      "properties": {
+        "response": {
+          "type": "string",
+          "description": "Natural, profile-aware reply that keeps the language practice going."
+        },
+        "tip": {
+          "type": "string",
+          "description": "Optional short correction or teaching tip based on the user's last message. Empty if nothing to add."
+        }
+      },
+      "required": [
+        "response",
+        "tip"
+      ],
+      "additionalProperties": false
+    }
+  }
+}
