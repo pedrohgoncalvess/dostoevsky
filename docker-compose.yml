@@ -1,0 +1,72 @@
+version: "3.8"
+
+services:
+  db:
+    image: timescale/timescaledb:latest-pg16
+    command: ["postgres", "-c", "timescaledb.enable_chunk_skipping=on"]
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-postgres}
+    ports:
+      - "${DB_EXPORT_PORT:-5432}:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - dostoevsky
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      DB_HOST: ${DB_HOST:-db}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_NAME: ${DB_NAME:-postgres}
+      SECRET_KEY: ${SECRET_KEY:-change-me}
+      OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+      LOCAL_MEDIA_ROOT: ${LOCAL_MEDIA_ROOT:-local_media}
+      S3_MEDIA_ROOT: ${S3_MEDIA_ROOT:-/app/_s3}
+    ports:
+      - "${API_EXPORT_PORT:-8080}:8080"
+    volumes:
+      - media_data:/app/_s3
+    networks:
+      - dostoevsky
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080}
+    env_file:
+      - .env
+    environment:
+      SSR_API_BASE_URL: ${SSR_API_BASE_URL:-http://backend:8080}
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    networks:
+      - dostoevsky
+    depends_on:
+      - backend
+
+volumes:
+  pg_data:
+  media_data:
+
+networks:
+  dostoevsky:
