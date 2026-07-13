@@ -1,0 +1,51 @@
+-- teacher feat
+-- depends: 20250506_01_aaBKK-initial-migration
+
+
+-- TODO
+-- CREATE SCHEMA IF NOT EXISTS "conf";
+--
+-- CREATE TYPE "conf"."language" AS ENUM ('portuguese', 'english', 'french', 'spanish')
+--
+-- CREATE TABLE "conf"."learn"(
+--     id BIGINT NOT NULL GENERATED ALWAYS AS IDENTITY,
+--     public_id UUID NOT NULL DEFAULT uuid_generate_v4() UNIQUE,
+--     user_id INTEGER NOT NULL,
+--     primary_language "conf"."language" NOT NULL,
+--     learn_language "conf"."language" NOT NULL,
+--
+--     inserted_at TIMESTAMP NOT NULL DEFAULT now(),
+--     deleted_at TIMESTAMP,
+--
+--     CONSTRAINT learn_pk PRIMARY KEY (id),
+--     CONSTRAINT learn_user_fk FOREIGN KEY (user_id) REFERENCES "base"."user"(id),
+--     CONSTRAINT primary_learn_language_uq UNIQUE (primary_language, learn_language),
+-- );
+--
+-- CREATE TABLE "conf"."objective"(
+--     id BIGINT NOT NULL GENERATED ALWAYS AS IDENTITY,
+--     public_id UUID NOT NULL DEFAULT uuid_generate_v4() UNIQUE,
+--     learn_id INTEGER NOT NULL,
+--     description TEXT NOT NULL,
+--
+--     inserted_at TIMESTAMP NOT NULL DEFAULT now(),
+--
+--     CONSTRAINT objetive_pk PRIMARY KEY (id),
+--     CONSTRAINT objetive_learn_fk FOREIGN KEY (learn_id) REFERENCES "conf"."learn"(id)
+-- );
+--
+-- CREATE TYPE "content"."question_type" AS ENUM ('text', 'multiple-choice', 'pronunciation')
+--
+-- CREATE TABLE "content"."question"(
+--     id BIGINT NOT NULL GENERATED ALWAYS AS IDENTITY,
+--     public_id UUID NOT NULL DEFAULT uuid_generate_v4() UNIQUE,
+--     type "content"."question_type" NOT NULL,
+--     question TEXT NOT NULL,
+--     choices TEXT[],
+--     correct_answer TEXT[] NOT NULL,
+--     answered_correctly BOOLEAN,
+--
+--     inserted_at TIMESTAMP NOT NULL,
+--
+--     CONSTRAINT set_question_pk PRIMARY KEY (id)
+-- );
