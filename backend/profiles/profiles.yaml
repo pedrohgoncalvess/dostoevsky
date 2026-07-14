@@ -1,5 +1,20 @@
 - bartender:
     prompt: profiles/bartender.md
-    description: ""
-    tip: ""
+    description: Practice casual conversation and ordering at a bar or restaurant.
+    tip: Attach a menu or drink list to make the roleplay more realistic.
+    teacher_context: true
+- interviewer:
+    prompt: profiles/interviewer.md
+    description: Practice a job interview for a technology position.
+    tip: Attach a job description and/or your resume so the interviewer can ask relevant questions.
+    teacher_context: true
+- taxi_driver:
+    prompt: profiles/taxi_driver.md
+    description: Practice giving directions and chatting with a taxi or rideshare driver.
+    tip: Attach a city guide, map, or list of places to make the ride more realistic.
+    teacher_context: true
+- negotiator:
+    prompt: profiles/negotiator.md
+    description: Practice negotiation skills for business, salary, contracts, or deals.
+    tip: Attach pricing sheets, contract terms, product specs, or a job description to ground the negotiation.
     teacher_context: true
