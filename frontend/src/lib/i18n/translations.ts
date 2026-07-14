@@ -50,7 +50,10 @@ export const translations = {
 			recording: 'Listening...',
 			processingAudio: 'Processing audio...',
 			playing: 'Speaking...',
-			audioError: 'Audio conversation failed'
+			audioError: 'Audio conversation failed',
+			transcript: 'Transcript',
+			transcriptEmpty: 'Transcript will appear here as you speak.',
+			tipLabel: 'Response tip'
 		},
 		sidebar: {
 			newConversation: 'New conversation',
@@ -90,7 +93,9 @@ export const translations = {
 			studyPlanGoalLabel: 'Goal (optional)',
 			studyPlanGoalPlaceholder: 'e.g., prepare for a job interview',
 			studyPlanCreate: 'Create study plan',
-			studyPlanSave: 'Save'
+			studyPlanSave: 'Save',
+			needTipLabel: 'Show response tips',
+			needTipHint: 'The assistant will suggest how to answer each turn.'
 		}
 	},
 	pt: {
@@ -142,7 +147,10 @@ export const translations = {
 			recording: 'Ouvindo...',
 			processingAudio: 'Processando áudio...',
 			playing: 'Falando...',
-			audioError: 'Falha na conversa de áudio'
+			audioError: 'Falha na conversa de áudio',
+			transcript: 'Transcrição',
+			transcriptEmpty: 'A transcrição aparecerá aqui conforme você fala.',
+			tipLabel: 'Dica de resposta'
 		},
 		sidebar: {
 			newConversation: 'Nova conversação',
@@ -182,7 +190,9 @@ export const translations = {
 			studyPlanGoalLabel: 'Objetivo (opcional)',
 			studyPlanGoalPlaceholder: 'ex.: preparar para uma entrevista de emprego',
 			studyPlanCreate: 'Criar plano de estudo',
-			studyPlanSave: 'Salvar'
+			studyPlanSave: 'Salvar',
+			needTipLabel: 'Mostrar dicas de resposta',
+			needTipHint: 'O assistente sugerirá como responder a cada turno.'
 		}
 	}
 } as const;

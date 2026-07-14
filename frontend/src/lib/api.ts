@@ -72,7 +72,8 @@ export async function listInteractions(limit = 20): Promise<Interaction[]> {
 export async function createInteraction(
 	profileId: string,
 	studyPlanId: string,
-	name?: string
+	name?: string,
+	needTip?: boolean
 ): Promise<Interaction> {
 	const response = await fetch(`${API_BASE_URL}/conversation/interactions`, {
 		method: 'POST',
@@ -80,7 +81,8 @@ export async function createInteraction(
 		body: JSON.stringify({
 			profile_public_id: profileId,
 			study_plan_public_id: studyPlanId,
-			name
+			name,
+			need_tip: needTip
 		})
 	});
 	const data = await handleResponse<{ public_id: string } & Omit<Interaction, 'id'>>(response);

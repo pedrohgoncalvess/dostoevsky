@@ -21,6 +21,7 @@ export interface Interaction {
 	name: string | null;
 	profile_id: string;
 	profile_name?: string;
+	need_tip: boolean;
 	inserted_at: string;
 }
 

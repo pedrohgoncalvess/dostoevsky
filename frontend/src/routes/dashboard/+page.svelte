@@ -71,7 +71,12 @@
 		}
 	}
 
-	async function handleStartConversation(profileId: string, studyPlanId: string) {
+	async function handleStartConversation(
+		profileId: string,
+		studyPlanId: string,
+		mediaIds: string[],
+		needTip: boolean
+	) {
 		creating = true;
 		error = null;
 		try {
@@ -79,7 +84,8 @@
 			const interaction = await createInteraction(
 				profileId,
 				studyPlanId,
-				profile?.name ?? $t('conversation.newConversation')
+				profile?.name ?? $t('conversation.newConversation'),
+				needTip
 			);
 			modalOpen = false;
 			await goto(`/conversation?id=${interaction.id}`);

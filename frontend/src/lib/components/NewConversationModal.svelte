@@ -7,7 +7,12 @@
 		studyPlans: StudyPlan[];
 		medias: Media[];
 		loading?: boolean;
-		onStart: (profileId: string, studyPlanId: string, mediaIds: string[]) => void;
+		onStart: (
+			profileId: string,
+			studyPlanId: string,
+			mediaIds: string[],
+			needTip: boolean
+		) => void;
 		onClose: () => void;
 	}
 
@@ -16,6 +21,7 @@
 	let selectedProfileId = $state('');
 	let selectedStudyPlanId = $state('');
 	let selectedMediaIds = $state<string[]>([]);
+	let needTip = $state(false);
 
 	function toggleMedia(id: string) {
 		if (selectedMediaIds.includes(id)) {
@@ -27,7 +33,7 @@
 
 	function handleStart() {
 		if (!selectedProfileId || !selectedStudyPlanId) return;
-		onStart(selectedProfileId, selectedStudyPlanId, selectedMediaIds);
+		onStart(selectedProfileId, selectedStudyPlanId, selectedMediaIds, needTip);
 	}
 
 	function handleKeydown(event: KeyboardEvent) {
@@ -105,6 +111,12 @@
 					{/each}
 				</div>
 			</div>
+
+			<label class="field field--inline">
+				<input type="checkbox" bind:checked={needTip} />
+				<span class="field-label">{$t('modal.needTipLabel')}</span>
+			</label>
+			<span class="hint">{$t('modal.needTipHint')}</span>
 		</div>
 
 		<footer class="footer">
@@ -136,7 +148,7 @@
 
 	.modal {
 		width: 100%;
-		max-width: 480px;
+		max-width: 520px;
 		max-height: 90vh;
 		overflow-y: auto;
 		display: flex;
@@ -181,6 +193,17 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-2);
+	}
+
+	.field--inline {
+		flex-direction: row;
+		align-items: center;
+		gap: var(--space-3);
+		margin-top: var(--space-2);
+	}
+
+	.field--inline .field-label {
+		margin: 0;
 	}
 
 	.field-label {

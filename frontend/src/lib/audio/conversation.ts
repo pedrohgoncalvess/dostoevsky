@@ -3,7 +3,14 @@ import { AudioPlayer } from './player';
 import { AudioRecorder } from './recorder';
 
 export type AudioStatus =
-	'idle' | 'connecting' | 'connected' | 'recording' | 'processing' | 'playing' | 'error' | 'closed';
+	| 'idle'
+	| 'connecting'
+	| 'connected'
+	| 'recording'
+	| 'processing'
+	| 'playing'
+	| 'error'
+	| 'closed';
 
 type AudioEvent =
 	| { type: 'ready' }
@@ -20,20 +27,35 @@ interface AudioConversationCallbacks {
 	onUserTranscription?: (text: string) => void;
 	onAssistantMessage?: (text: string) => void;
 	onError?: (message: string) => void;
+	onVolumeChange?: (volume: number) => void;
 }
 
 export class AudioConversation {
 	private ws: WebSocket | null = null;
-	private recorder = new AudioRecorder();
+	private recorder: AudioRecorder;
 	private player = new AudioPlayer();
 	private status: AudioStatus = 'idle';
 	private interactionId: string;
 	private callbacks: AudioConversationCallbacks;
 	private pendingAudio: Uint8Array[] = [];
+	private closing = false;
+	private manuallyPaused = false;
 
 	constructor(interactionId: string, callbacks: AudioConversationCallbacks = {}) {
 		this.interactionId = interactionId;
 		this.callbacks = callbacks;
+		this.recorder = new AudioRecorder({
+			sampleRate: 24_000,
+			bufferSize: 4096,
+			silenceThreshold: 350,
+			silenceTimeoutMs: 1_800,
+			minDurationMs: 800,
+			callbacks: {
+				onChunk: (chunk) => this.ws?.send(chunk),
+				onVolumeChange: (volume) => this.callbacks.onVolumeChange?.(volume),
+				onSilence: () => this.stopRecording()
+			}
+		});
 	}
 
 	get currentStatus(): AudioStatus {
@@ -61,11 +83,13 @@ export class AudioConversation {
 		};
 
 		this.ws.onerror = () => {
+			if (this.closing) return;
 			this.setStatus('error');
 			this.callbacks.onError?.('WebSocket connection failed.');
 		};
 
 		this.ws.onclose = () => {
+			if (this.closing) return;
 			this.setStatus('closed');
 			this.ws = null;
 		};
@@ -73,21 +97,30 @@ export class AudioConversation {
 		await this.waitForOpen();
 	}
 
-	async startRecording(): Promise<void> {
+	startRecording(manual = false): void {
+		if (this.recorder.recording) return;
+		if (manual) {
+			this.manuallyPaused = false;
+		}
+		void this._startRecording();
+	}
+
+	private async _startRecording(): Promise<void> {
 		if (this.recorder.recording) return;
 		if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
 			await this.connect();
 		}
 
 		this.pendingAudio = [];
-		await this.recorder.start((chunk) => {
-			this.ws?.send(chunk);
-		});
+		await this.recorder.start();
 		this.setStatus('recording');
 	}
 
-	stopRecording(): void {
+	stopRecording(manual = false): void {
 		if (!this.recorder.recording) return;
+		if (manual) {
+			this.manuallyPaused = true;
+		}
 		this.recorder.stop();
 		this.setStatus('processing');
 		this.ws?.send(JSON.stringify({ type: 'commit', audio_format: 'pcm' }));
@@ -95,9 +128,9 @@ export class AudioConversation {
 
 	toggleRecording(): void {
 		if (this.recorder.recording) {
-			this.stopRecording();
+			this.stopRecording(true);
 		} else {
-			void this.startRecording();
+			this.startRecording(true);
 		}
 	}
 
@@ -123,6 +156,9 @@ export class AudioConversation {
 			case 'assistant_audio_end':
 				await this.playPendingAudio();
 				this.setStatus('connected');
+				if (!this.manuallyPaused) {
+					setTimeout(() => this.startRecording(), 400);
+				}
 				break;
 			case 'noise_detected':
 			case 'no_speech_detected':
@@ -162,7 +198,13 @@ export class AudioConversation {
 				this.ws?.removeEventListener('open', onOpen);
 				resolve();
 			};
+			const onError = () => {
+				this.ws?.removeEventListener('open', onOpen);
+				this.ws?.removeEventListener('error', onError);
+				reject(new Error('WebSocket failed to open'));
+			};
 			this.ws.addEventListener('open', onOpen);
+			this.ws.addEventListener('error', onError);
 		});
 	}
 
@@ -172,6 +214,7 @@ export class AudioConversation {
 	}
 
 	close(): void {
+		this.closing = true;
 		this.ws?.close();
 		this.recorder.stop();
 		this.player.close();
