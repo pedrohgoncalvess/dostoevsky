@@ -5,13 +5,32 @@ from app.auth.models import UserCreate
 from app.auth.services import get_current_user
 from app.users.services import get_password_hash
 from database.connection import DatabaseConnection
+from database.models.ai import Model
 from database.models.base import User
+from database.models.conf import UserPreference
+from database.operations.ai import ModelRepository
 from database.operations.base.user import UserRepository
+from database.operations.conf import UserPreferenceRepository
 
 
 router = APIRouter(
     prefix="/users",
 )
+
+
+async def _create_default_preferences(conn, user_id: int) -> None:
+    model_repo = ModelRepository(conn)
+    stt_model = await model_repo.find_by_openrouter_id("local:faster-whisper")
+    tts_model = await model_repo.find_by_openrouter_id("local:kokoro")
+
+    preference = UserPreference(
+        user_id=user_id,
+        stt_model_id=stt_model.id if stt_model else None,
+        tts_model_id=tts_model.id if tts_model else None,
+        voice="af_heart",
+    )
+    await UserPreferenceRepository(conn).insert(preference)
+
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 async def register(user: UserCreate):
@@ -32,6 +51,7 @@ async def register(user: UserCreate):
             password=hashed_password
         )
         _ = await user_repository.insert(new_user)
+        await _create_default_preferences(conn, new_user.id)
 
     return {
         "id": new_user.id,
