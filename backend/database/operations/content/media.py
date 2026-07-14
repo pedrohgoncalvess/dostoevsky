@@ -19,6 +19,7 @@ class MediaRepository(Interface[Media]):
         subpath: str,
         media_format: str,
         description: str | None = None,
+        transcription: str | None = None,
         embedding: list[float] | None = None,
     ) -> Media:
         media = Media(
@@ -28,6 +29,7 @@ class MediaRepository(Interface[Media]):
             subpath=subpath,
             format=media_format,
             description=description,
+            transcription=transcription,
         )
         result = await self.insert(media)
 
@@ -35,6 +37,12 @@ class MediaRepository(Interface[Media]):
             await self.update_embedding(result.id, embedding)
 
         return result
+
+    async def update_transcription(self, media_id: int, transcription: str) -> None:
+        media = await self.find_by_id(media_id)
+        if media:
+            media.transcription = transcription
+            await self.db.commit()
 
     async def update_embedding(self, media_id: int, embedding: list[float]) -> None:
         vector_literal = "[" + ",".join(str(v) for v in embedding) + "]"

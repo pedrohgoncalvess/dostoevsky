@@ -42,5 +42,7 @@ You must always respond in the study language. Only use the native language if t
 ## Output
 
 Respond with a JSON object containing:
-- `response`: your natural reply in the conversation, following the profile, files, and study language rule.
-- `tip`: a short, optional suggestion on how the user could improve their last message (grammar, vocabulary, pronunciation note, or cultural tip). Leave this empty if there is nothing useful to add.
+- `response`: your natural reply in the conversation, following the profile, files, and study language rule. This is what the student will hear (TTS) and see as the assistant's message.
+- `tip`: a short, optional guidance to help the student form their next answer. Suggest useful words, phrases, sentence structures, or a direction the student can take in the conversation. Leave this empty if there is nothing useful to add.
+
+The `tip` is meant to coach the student's reply, not to correct the past message. Example tips: "Try answering with 'I would like to...' and mention a dish from the menu", "Ask about the price using 'How much does it cost?'", or "Use the past simple to describe what happened".

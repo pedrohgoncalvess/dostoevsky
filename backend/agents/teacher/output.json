@@ -8,11 +8,11 @@
       "properties": {
         "response": {
           "type": "string",
-          "description": "Natural, profile-aware reply that keeps the language practice going."
+          "description": "Natural, profile-aware reply in the study language. This is the message the student will hear and read."
         },
         "tip": {
           "type": "string",
-          "description": "Optional short correction or teaching tip based on the user's last message. Empty if nothing to add."
+          "description": "Optional guidance to help the student answer next. Suggest useful words, phrases, structures, or a direction for the reply. Empty if nothing useful to add."
         }
       },
       "required": [

@@ -32,8 +32,8 @@ router = APIRouter(prefix="/conversation")
 
 DEFAULT_CHAT_MODEL = "qwen/qwen3.5-flash-02-23"
 DEFAULT_PLANNING_MODEL = "deepseek/deepseek-v4-pro"
-DEFAULT_STT_MODEL = "canopylabs/orpheus-3b-0.1-ft"
-DEFAULT_TTS_MODEL = "google/gemini-2.5-flash-lite"
+DEFAULT_STT_MODEL = "google/gemini-2.5-flash"
+DEFAULT_TTS_MODEL = "canopylabs/orpheus-3b-0.1-ft"
 DEFAULT_TTS_VOICE = "tara"
 DEFAULT_TTS_FORMAT = "pcm"
 SYSTEM_PROMPT = (
@@ -356,7 +356,8 @@ async def _save_media_record(
     description: str | None,
 ) -> Media:
     filename, subpath = await save_interaction_media(data, user_id, interaction_id, media_format)
-    return await MediaRepository(conn).create_local_media(
+    return await MediaRepository(conn).create_user_media(
+        user_id=user_id,
         name=filename,
         bucket=LOCAL_MEDIA_BUCKET,
         subpath=subpath,
@@ -399,7 +400,9 @@ async def _build_teacher_history(
         return [{"role": "system", "content": SYSTEM_PROMPT}], None
 
     interaction, profile = interaction_with_profile
-    system_message = await _build_teacher_system_message(conn, profile.description)
+    system_message = await _build_teacher_system_message(
+        conn, profile.description
+    )
 
     history = [{"role": "system", "content": system_message}]
     history.extend(await MessageRepository(conn).build_chat_messages(interaction_id))
@@ -494,6 +497,7 @@ async def create_interaction(
     profile_public_id = payload.get("profile_public_id")
     name = payload.get("name")
     initial_context = payload.get("initial_context")
+    need_tip = bool(payload.get("need_tip", False))
 
     async with DatabaseConnection() as conn:
         profile = await ProfileRepository(conn).find_by_identifier(profile_public_id)
@@ -508,6 +512,7 @@ async def create_interaction(
             study_plan_id=study_plan.id,
             name=name,
             initial_context=initial_context,
+            need_tip=need_tip,
         )
 
     return {
@@ -519,6 +524,7 @@ async def create_interaction(
         "profile_name": profile.name,
         "study_plan_id": interaction.study_plan_id,
         "study_plan_public_id": str(study_plan.public_id),
+        "need_tip": interaction.need_tip,
         "inserted_at": interaction.inserted_at.isoformat() if interaction.inserted_at else None,
     }
 
@@ -541,6 +547,7 @@ async def list_interactions(
             "public_id": str(i.public_id),
             "name": i.name,
             "profile_id": i.profile_id,
+            "need_tip": i.need_tip,
             "inserted_at": i.inserted_at.isoformat() if i.inserted_at else None,
         }
         for i in interactions

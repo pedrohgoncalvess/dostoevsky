@@ -49,6 +49,7 @@ class InteractionRepository(Interface[Interaction]):
         study_plan_id: int,
         name: str | None = None,
         initial_context: str | None = None,
+        need_tip: bool = False,
     ) -> Interaction:
         return await self.insert(
             Interaction(
@@ -57,6 +58,7 @@ class InteractionRepository(Interface[Interaction]):
                 study_plan_id=study_plan_id,
                 name=name,
                 initial_context=initial_context,
+                need_tip=need_tip,
             )
         )
 
