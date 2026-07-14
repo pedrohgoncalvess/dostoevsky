@@ -1,8 +1,12 @@
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.auth.services import get_current_user
+
+logger = logging.getLogger(__name__)
+from app.conversation.local_model_manager import ensure_local_models_for_study_plan
 from database.connection import DatabaseConnection
 from database.models.base import User
 from database.operations.conf import StudyPlanRepository
@@ -38,6 +42,14 @@ async def create_study_plan(
             self_declared_level=self_declared_level,
             goal=goal,
         )
+
+    # Trigger download/selection of local STT/TTS assets only when the user
+    # creates their first study plan. This avoids downloading any voice/model
+    # during registration.
+    try:
+        await ensure_local_models_for_study_plan(user.id, study_language)
+    except Exception:
+        logger.exception("Failed to activate local models for study plan")
 
     return _serialize(plan)
 

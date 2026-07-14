@@ -137,6 +137,43 @@ class FasterWhisperSTTProvider(STTProvider):
                 pass
 
 
+def ensure_kokoro_model_files(
+    model_path: str | None = None,
+    voices_path: str | None = None,
+) -> tuple[str, str]:
+    """Download Kokoro ONNX model and voices bin if not already present."""
+    if model_path and voices_path:
+        return model_path, voices_path
+
+    cache_dir = Path(get_env_var("LOCAL_MODELS_DIR") or "models")
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    model_file = cache_dir / "kokoro-v1.0.onnx"
+    voices_file = cache_dir / "voices-v1.0.bin"
+
+    _download_if_missing(KOKORO_MODEL_URL, model_file)
+    _download_if_missing(KOKORO_VOICES_URL, voices_file)
+    return str(model_file), str(voices_file)
+
+
+def _kokoro_lang_from_voice(voice_code: str) -> str:
+    """Kokoro voice prefixes encode the language code (e.g. 'af_heart' -> 'a')."""
+    if not voice_code:
+        return "en-us"
+    prefix = voice_code[0].lower()
+    mapping = {
+        "a": "en-us",
+        "b": "en-gb",
+        "e": "es",
+        "f": "fr-fr",
+        "h": "hi",
+        "i": "it",
+        "j": "ja",
+        "p": "pt-br",
+        "z": "zh",
+    }
+    return mapping.get(prefix, "en-us")
+
+
 class KokoroTTSProvider(TTSProvider):
     """Local TTS using Kokoro via ONNX Runtime (kokoro-onnx)."""
 
@@ -152,24 +189,13 @@ class KokoroTTSProvider(TTSProvider):
         self.model_path = model_path or get_env_var("LOCAL_KOKORO_MODEL_PATH")
         self.voices_path = voices_path or get_env_var("LOCAL_KOKORO_VOICES_PATH")
         self.voice = voice or get_env_var("LOCAL_TTS_VOICE") or "af_heart"
-        self.lang = lang or get_env_var("LOCAL_TTS_LANG") or "en-us"
-
-    def _ensure_model_files(self) -> tuple[str, str]:
-        if self.model_path and self.voices_path:
-            return self.model_path, self.voices_path
-
-        cache_dir = Path(get_env_var("LOCAL_MODELS_DIR") or "models")
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        model_file = cache_dir / "kokoro-v1.0.onnx"
-        voices_file = cache_dir / "voices-v1.0.bin"
-
-        _download_if_missing(KOKORO_MODEL_URL, model_file)
-        _download_if_missing(KOKORO_VOICES_URL, voices_file)
-        return str(model_file), str(voices_file)
+        self.lang = lang or get_env_var("LOCAL_TTS_LANG")
 
     def _load_kokoro(self):
         if KokoroTTSProvider._kokoro is None:
-            model_path, voices_path = self._ensure_model_files()
+            model_path, voices_path = ensure_kokoro_model_files(
+                self.model_path, self.voices_path
+            )
             logger.info("Loading Kokoro ONNX model from %s", model_path)
             from kokoro_onnx import Kokoro
 
@@ -187,9 +213,10 @@ class KokoroTTSProvider(TTSProvider):
 
         kokoro = await asyncio.to_thread(self._load_kokoro)
         chosen_voice = voice or self.voice
+        lang = self.lang or _kokoro_lang_from_voice(chosen_voice)
 
         def _synthesize():
-            audio, sample_rate = kokoro.create(text, voice=chosen_voice, lang=self.lang)
+            audio, sample_rate = kokoro.create(text, voice=chosen_voice, lang=lang)
             return np.asarray(audio), sample_rate
 
         audio, sample_rate = await asyncio.to_thread(_synthesize)

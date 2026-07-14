@@ -27,6 +27,7 @@ class Model(Base):
 
     prices = relationship("ModelPrice", back_populates="model")
     agents = relationship("Agent", back_populates="model")
+    local_voices = relationship("LocalVoice", back_populates="model")
 
 
 class ModelPrice(Base):

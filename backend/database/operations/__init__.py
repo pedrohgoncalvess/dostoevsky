@@ -1,5 +1,10 @@
 from database.operations.interface import Interface
-from database.operations.ai import AgentRepository, ModelPriceRepository, ModelRepository
+from database.operations.ai import (
+    AgentRepository,
+    LocalVoiceRepository,
+    ModelPriceRepository,
+    ModelRepository,
+)
 from database.operations.base import RefreshRepository, UserRepository
 from database.operations.conf import StudyPlanRepository, UserAgentPreferenceRepository, UserPreferenceRepository
 from database.operations.content import (
@@ -15,6 +20,7 @@ __all__ = [
     "Interface",
     "InteractionMediaRepository",
     "InteractionRepository",
+    "LocalVoiceRepository",
     "MediaRepository",
     "MessageRepository",
     "ModelPriceRepository",
