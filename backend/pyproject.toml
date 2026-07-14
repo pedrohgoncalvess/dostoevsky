@@ -23,7 +23,7 @@ dependencies = [
     "pytest-asyncio>=1.0.0",
     "python-dotenv>=1.1.0",
     "sqlalchemy[asyncio]>=2.0.40",
-    "uvicorn>=0.34.2",
+    "uvicorn[standard]>=0.34.2",
     "yoyo-migrations>=9.0.0",
     "python-multipart>=0.0.32",
 ]
