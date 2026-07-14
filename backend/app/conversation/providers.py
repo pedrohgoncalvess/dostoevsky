@@ -1,0 +1,244 @@
+from __future__ import annotations
+
+import asyncio
+import logging
+import os
+import tempfile
+from abc import ABC, abstractmethod
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+import httpx
+import numpy as np
+
+from app.conversation.audio_utils import float_to_pcm16, pcm_to_wav
+from app.conversation.openrouter import OpenRouterClient
+from utils import get_env_var
+
+if TYPE_CHECKING:
+    from database.models.ai import Model
+
+logger = logging.getLogger(__name__)
+
+KOKORO_MODEL_URL = (
+    "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/"
+    "kokoro-v1.0.onnx"
+)
+KOKORO_VOICES_URL = (
+    "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/"
+    "voices-v1.0.bin"
+)
+
+
+class STTProvider(ABC):
+    @abstractmethod
+    async def transcribe(
+        self,
+        audio: bytes,
+        audio_format: str,
+        language: str | None = None,
+    ) -> str:
+        """Transcribe audio bytes to text."""
+
+
+class TTSProvider(ABC):
+    @abstractmethod
+    async def speech(
+        self,
+        text: str,
+        voice: str | None = None,
+        response_format: str = "pcm",
+    ) -> bytes:
+        """Synthesize text into audio bytes."""
+
+
+class OpenRouterSTTProvider(STTProvider):
+    def __init__(self, model_id: str) -> None:
+        self.model_id = model_id
+        self.client = OpenRouterClient()
+
+    async def transcribe(
+        self,
+        audio: bytes,
+        audio_format: str,
+        language: str | None = None,
+    ) -> str:
+        return await self.client.transcribe(audio, audio_format, self.model_id, language)
+
+
+class OpenRouterTTSProvider(TTSProvider):
+    def __init__(self, model_id: str, voice: str, response_format: str = "pcm") -> None:
+        self.model_id = model_id
+        self.voice = voice
+        self.response_format = response_format
+        self.client = OpenRouterClient()
+
+    async def speech(self, text: str, voice: str | None = None, response_format: str = "pcm") -> bytes:
+        return await self.client.speech(
+            text,
+            self.model_id,
+            voice or self.voice,
+            response_format or self.response_format,
+        )
+
+
+class FasterWhisperSTTProvider(STTProvider):
+    """Local STT using faster-whisper (CTranslate2-based Whisper)."""
+
+    _model = None
+
+    def __init__(
+        self,
+        model_size: str | None = None,
+        device: str = "auto",
+        compute_type: str = "default",
+    ) -> None:
+        self.model_size = model_size or get_env_var("LOCAL_STT_MODEL_SIZE") or "base"
+        self.device = device or get_env_var("LOCAL_STT_DEVICE") or "auto"
+        self.compute_type = compute_type or get_env_var("LOCAL_STT_COMPUTE_TYPE") or "default"
+
+    def _load_model(self):
+        if FasterWhisperSTTProvider._model is None:
+            logger.info("Loading faster-whisper model: %s", self.model_size)
+            from faster_whisper import WhisperModel
+
+            FasterWhisperSTTProvider._model = WhisperModel(
+                self.model_size,
+                device=self.device,
+                compute_type=self.compute_type,
+            )
+        return FasterWhisperSTTProvider._model
+
+    async def transcribe(
+        self,
+        audio: bytes,
+        audio_format: str,
+        language: str | None = None,
+    ) -> str:
+        if audio_format.lower() in {"pcm", "raw"}:
+            audio = pcm_to_wav(audio)
+            audio_format = "wav"
+
+        suffix = ".wav" if audio_format.lower() == "wav" else ".bin"
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+            tmp.write(audio)
+            tmp_path = tmp.name
+
+        try:
+            model = await asyncio.to_thread(self._load_model)
+            segments, _info = await asyncio.to_thread(
+                lambda: list(model.transcribe(tmp_path, language=language)),
+            )
+            return " ".join(segment.text.strip() for segment in segments).strip()
+        finally:
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+
+
+class KokoroTTSProvider(TTSProvider):
+    """Local TTS using Kokoro via ONNX Runtime (kokoro-onnx)."""
+
+    _kokoro = None
+
+    def __init__(
+        self,
+        model_path: str | None = None,
+        voices_path: str | None = None,
+        voice: str | None = None,
+        lang: str | None = None,
+    ) -> None:
+        self.model_path = model_path or get_env_var("LOCAL_KOKORO_MODEL_PATH")
+        self.voices_path = voices_path or get_env_var("LOCAL_KOKORO_VOICES_PATH")
+        self.voice = voice or get_env_var("LOCAL_TTS_VOICE") or "af_heart"
+        self.lang = lang or get_env_var("LOCAL_TTS_LANG") or "en-us"
+
+    def _ensure_model_files(self) -> tuple[str, str]:
+        if self.model_path and self.voices_path:
+            return self.model_path, self.voices_path
+
+        cache_dir = Path(get_env_var("LOCAL_MODELS_DIR") or "models")
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        model_file = cache_dir / "kokoro-v1.0.onnx"
+        voices_file = cache_dir / "voices-v1.0.bin"
+
+        _download_if_missing(KOKORO_MODEL_URL, model_file)
+        _download_if_missing(KOKORO_VOICES_URL, voices_file)
+        return str(model_file), str(voices_file)
+
+    def _load_kokoro(self):
+        if KokoroTTSProvider._kokoro is None:
+            model_path, voices_path = self._ensure_model_files()
+            logger.info("Loading Kokoro ONNX model from %s", model_path)
+            from kokoro_onnx import Kokoro
+
+            KokoroTTSProvider._kokoro = Kokoro(model_path, voices_path)
+        return KokoroTTSProvider._kokoro
+
+    async def speech(
+        self,
+        text: str,
+        voice: str | None = None,
+        response_format: str = "pcm",
+    ) -> bytes:
+        if not text:
+            return b""
+
+        kokoro = await asyncio.to_thread(self._load_kokoro)
+        chosen_voice = voice or self.voice
+
+        def _synthesize():
+            audio, sample_rate = kokoro.create(text, voice=chosen_voice, lang=self.lang)
+            return np.asarray(audio), sample_rate
+
+        audio, sample_rate = await asyncio.to_thread(_synthesize)
+        pcm = float_to_pcm16(audio)
+
+        if response_format.lower() == "wav":
+            return pcm_to_wav(pcm, sample_rate=sample_rate)
+        return pcm
+
+
+def _download_if_missing(url: str, destination: Path) -> None:
+    if destination.exists():
+        return
+    logger.info("Downloading %s to %s", url, destination)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with httpx.Client(timeout=300, follow_redirects=True) as client:
+        with client.stream("GET", url) as response:
+            response.raise_for_status()
+            with open(destination, "wb") as f:
+                for chunk in response.iter_bytes(chunk_size=8192):
+                    f.write(chunk)
+
+
+class AudioProviderFactory:
+    def __init__(self) -> None:
+        self._openrouter_stt: dict[str, OpenRouterSTTProvider] = {}
+        self._openrouter_tts: dict[str, OpenRouterTTSProvider] = {}
+        self._local_stt: FasterWhisperSTTProvider | None = None
+        self._local_tts: KokoroTTSProvider | None = None
+
+    def stt_provider(self, model: Model) -> STTProvider:
+        openrouter_id = model.openrouter_id
+        if openrouter_id.startswith("local:"):
+            if self._local_stt is None:
+                self._local_stt = FasterWhisperSTTProvider()
+            return self._local_stt
+
+        if openrouter_id not in self._openrouter_stt:
+            self._openrouter_stt[openrouter_id] = OpenRouterSTTProvider(openrouter_id)
+        return self._openrouter_stt[openrouter_id]
+
+    def tts_provider(self, model: Model, voice: str | None = None) -> TTSProvider:
+        openrouter_id = model.openrouter_id
+        if openrouter_id.startswith("local:"):
+            if self._local_tts is None:
+                self._local_tts = KokoroTTSProvider()
+            return self._local_tts
+
+        key = f"{openrouter_id}:{voice}"
+        if key not in self._openrouter_tts:
+            self._openrouter_tts[key] = OpenRouterTTSProvider(openrouter_id, voice or "tara")
+        return self._openrouter_tts[key]

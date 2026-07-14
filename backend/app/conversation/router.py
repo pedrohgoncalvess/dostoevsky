@@ -2,6 +2,7 @@ import base64
 import binascii
 import json
 from datetime import datetime, timezone
+from types import SimpleNamespace
 from typing import Any
 
 import jwt
@@ -11,13 +12,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.services import ALGORITHM, SECRET_KEY, get_current_user
 from app.conversation.audio import analyze_noise
 from app.conversation.openrouter import OpenRouterClient, OpenRouterError
+from app.conversation.providers import AudioProviderFactory
 from app.conversation.storage import LOCAL_MEDIA_BUCKET, save_interaction_media
 from database.connection import DatabaseConnection
+from database.models.ai import Model
 from database.models.base import User
 from database.models.content import Interaction, Media, Message
 from database.operations.ai import AgentRepository, ModelRepository
 from database.operations.base import UserRepository
-from database.operations.conf import StudyPlanRepository
+from database.operations.conf import StudyPlanRepository, UserPreferenceRepository
 from database.operations.content import (
     InteractionMediaRepository,
     InteractionRepository,
@@ -36,6 +39,8 @@ DEFAULT_STT_MODEL = "google/gemini-2.5-flash"
 DEFAULT_TTS_MODEL = "canopylabs/orpheus-3b-0.1-ft"
 DEFAULT_TTS_VOICE = "tara"
 DEFAULT_TTS_FORMAT = "pcm"
+
+audio_factory = AudioProviderFactory()
 SYSTEM_PROMPT = (
     "You are a concise language-learning conversation partner. "
     "Keep replies natural, short, and useful for spoken practice."
@@ -153,6 +158,37 @@ async def conversation_ws(websocket: WebSocket) -> None:
         return
 
 
+async def _resolve_audio_models(
+    conn: AsyncSession, user_id: int
+) -> tuple[Model, Model, str]:
+    """Pick STT/TTS models and voice from user preference or local defaults."""
+    pref = await UserPreferenceRepository(conn).find_by_user_id(user_id)
+    model_repo = ModelRepository(conn)
+
+    stt_model: Model | None = None
+    if pref and pref.stt_model_id:
+        stt_model = await model_repo.find_by_id(pref.stt_model_id)
+    if not stt_model:
+        stt_model = await model_repo.find_by_openrouter_id("local:faster-whisper")
+    if not stt_model:
+        stt_model = await model_repo.find_first_stt_model()
+    if not stt_model:
+        stt_model = SimpleNamespace(openrouter_id=DEFAULT_STT_MODEL)  # type: ignore[assignment]
+
+    tts_model: Model | None = None
+    if pref and pref.tts_model_id:
+        tts_model = await model_repo.find_by_id(pref.tts_model_id)
+    if not tts_model:
+        tts_model = await model_repo.find_by_openrouter_id("local:kokoro")
+    if not tts_model:
+        tts_model = await model_repo.find_first_tts_model()
+    if not tts_model:
+        tts_model = SimpleNamespace(openrouter_id=DEFAULT_TTS_MODEL)  # type: ignore[assignment]
+
+    tts_voice = (pref.voice if pref else None) or DEFAULT_TTS_VOICE
+    return stt_model, tts_model, tts_voice  # type: ignore[return-value]
+
+
 async def _process_audio_turn(
     websocket: WebSocket,
     user: User,
@@ -186,16 +222,16 @@ async def _process_audio_turn(
         await websocket.send_json({"type": "noise_detected", "media_id": media.id})
         return
 
-    stt_model = DEFAULT_STT_MODEL
-    tts_model = DEFAULT_TTS_MODEL
-    tts_voice = DEFAULT_TTS_VOICE
     tts_format = DEFAULT_TTS_FORMAT
 
     try:
-        client = OpenRouterClient()
-        transcription = await client.transcribe(audio, audio_format, stt_model, language)
-    except OpenRouterError as exc:
-        await websocket.send_json({"type": "error", "detail": str(exc)})
+        async with DatabaseConnection() as conn:
+            stt_model, tts_model, tts_voice = await _resolve_audio_models(conn, user.id)
+
+        stt_provider = audio_factory.stt_provider(stt_model)
+        transcription = await stt_provider.transcribe(audio, audio_format, language)
+    except Exception as exc:
+        await websocket.send_json({"type": "error", "detail": f"STT failed: {exc}"})
         return
 
     async with DatabaseConnection() as conn:
@@ -216,13 +252,16 @@ async def _process_audio_turn(
         return
 
     try:
+        client = OpenRouterClient()
         assistant_text, tip = await _call_teacher(client, history, interaction_id)
         if not assistant_text:
             await websocket.send_json({"type": "error", "detail": "Empty teacher response."})
             return
-        assistant_audio = await client.speech(assistant_text, tts_model, tts_voice, tts_format)
-    except OpenRouterError as exc:
-        await websocket.send_json({"type": "error", "detail": str(exc)})
+
+        tts_provider = audio_factory.tts_provider(tts_model, tts_voice)
+        assistant_audio = await tts_provider.speech(assistant_text, tts_voice, tts_format)
+    except Exception as exc:
+        await websocket.send_json({"type": "error", "detail": f"TTS/teacher failed: {exc}"})
         return
 
     async with DatabaseConnection() as conn:
