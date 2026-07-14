@@ -50,8 +50,9 @@ INSERT INTO "ai"."model" (name, openrouter_id, for_text, for_embedding, for_tts,
 ('Zyphra: Zonos v0.1 Transformer', 'zyphra/zonos-v0.1-transformer', false, false, true, false, false, ARRAY['american_female','american_male','british_female','british_male','random']),
 ('Microsoft: MAI-Voice-2', 'microsoft/mai-voice-2', false, false, true, false, false, ARRAY['en-US-Harper:MAI-Voice-2','es-MX-Valeria:MAI-Voice-2','fr-FR-Soleil:MAI-Voice-2','de-DE-Klaus:MAI-Voice-2']),
 ('Mistral: Voxtral Small 24B 2507', 'mistralai/voxtral-small-24b-2507', false, false, false, true, true, null),
-('Google: Gemini 2.5 Flash Lite', 'google/gemini-2.5-flash-lite', true, false, false, true, true, null),
+('Google: Gemini 2.5 Flash', 'google/gemini-2.5-flash', true, false, false, true, true, null),
 ('Xiaomi: MiMo-V2.5', 'xiaomi/mimo-v2.5', true, false, false, true, true, null),
+('OpenAI: Whisper', 'openai/whisper-1', false, false, false, false, true, null),
 ('BAAI: bge-m3', 'baai/bge-m3', false, true, false, false, false, null);
 -- TODO: Move this models infos to .yaml config file and insert statements to a script
 

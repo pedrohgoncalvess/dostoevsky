@@ -1,5 +1,7 @@
 import base64
+import io
 import json
+import wave
 from typing import Any
 
 import httpx
@@ -26,18 +28,42 @@ class OpenRouterClient:
         model: str,
         language: str | None = None,
     ) -> str:
-        payload: dict[str, Any] = {
-            "model": model,
-            "input_audio": {
-                "data": base64.b64encode(audio).decode("ascii"),
-                "format": audio_format,
-            },
-        }
-        if language:
-            payload["language"] = language
+        if audio_format.lower() in {"pcm", "raw"}:
+            audio = _pcm_to_wav(audio)
+            audio_format = "wav"
 
-        response = await self._json_request("/audio/transcriptions", payload)
-        return response.get("text", "")
+        prompt = "Please transcribe this audio file."
+        if language:
+            prompt += f" The audio is in {language}."
+
+        messages: list[dict[str, Any]] = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "input_audio",
+                        "input_audio": {
+                            "data": base64.b64encode(audio).decode("ascii"),
+                            "format": audio_format,
+                        },
+                    },
+                ],
+            }
+        ]
+
+        response = await self._json_request(
+            "/chat/completions",
+            {
+                "model": model,
+                "messages": messages,
+                "stream": False,
+            },
+        )
+        choices = response.get("choices") or []
+        if not choices:
+            return ""
+        return choices[0].get("message", {}).get("content", "")
 
     async def chat(self, messages: list[dict[str, str]], model: str, session_id: str) -> str:
         response = await self._json_request(
@@ -137,3 +163,19 @@ class OpenRouterClient:
                 ) from exc
             except httpx.RequestError as exc:
                 raise OpenRouterError(f"OpenRouter connection error: {exc}") from exc
+
+
+def _pcm_to_wav(
+    pcm_data: bytes,
+    sample_rate: int = 24_000,
+    channels: int = 1,
+    sample_width: int = 2,
+) -> bytes:
+    """Wrap raw PCM16 bytes in a WAV header for APIs that require a container format."""
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as wav:
+        wav.setnchannels(channels)
+        wav.setsampwidth(sample_width)
+        wav.setframerate(sample_rate)
+        wav.writeframes(pcm_data)
+    return buffer.getvalue()
