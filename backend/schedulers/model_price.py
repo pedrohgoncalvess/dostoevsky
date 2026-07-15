@@ -60,7 +60,7 @@ async def _sync_model_prices() -> None:
             for model in models:
                 try:
                     model_data = await _fetch_model_data(
-                        client, base_url, api_key, model.openrouter_id
+                        client, base_url, api_key, model.external_id
                     )
                     if model_data is None:
                         continue
@@ -84,9 +84,9 @@ async def _fetch_model_data(
     client: httpx.AsyncClient,
     base_url: str,
     api_key: str,
-    openrouter_id: str,
+    external_id: str,
 ) -> dict[str, Any] | None:
-    url = f"{base_url.rstrip('/')}{MODELS_ENDPOINT}/{openrouter_id}"
+    url = f"{base_url.rstrip('/')}{MODELS_ENDPOINT}/{external_id}"
     headers = {"Authorization": f"Bearer {api_key}"}
 
     response = await client.get(url, headers=headers)

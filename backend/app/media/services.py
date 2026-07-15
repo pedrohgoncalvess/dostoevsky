@@ -174,7 +174,7 @@ async def _describe(input_text: str) -> dict[str, Any]:
         client = OpenRouterClient()
         return await client.chat_structured(
             messages=messages,
-            model=model.openrouter_id,
+            model=model.external_id,
             json_schema=json_schema,
             session_id=f"media-description-{datetime.now(timezone.utc).isoformat()}",
         )
@@ -196,7 +196,7 @@ async def _embed(text: str) -> list[float]:
             raise RuntimeError("No embedding model configured.")
 
     client = OpenRouterClient()
-    return await client.embed(text, model.openrouter_id)
+    return await client.embed(text, model.external_id)
 
 
 def _serialize(media) -> dict[str, Any]:

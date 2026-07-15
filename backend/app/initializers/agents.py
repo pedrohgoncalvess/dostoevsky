@@ -73,16 +73,16 @@ async def _sync_agent(
     name: str,
     metadata: dict[str, Any],
 ) -> None:
-    model_openrouter_id = metadata.get("model_id")
+    model_external_id = metadata.get("model_id")
     prompt_relative_path = metadata.get("prompt_path")
     output_relative_path = metadata.get("output_path")
     description = metadata.get("description") or ""
     placeholders = metadata.get("placeholders") or []
 
-    if not model_openrouter_id or not prompt_relative_path:
+    if not model_external_id or not prompt_relative_path:
         return
 
-    model = await model_repository.find_by_openrouter_id(model_openrouter_id)
+    model = await model_repository.find_by_external_id(model_external_id)
     if not model:
         return
 

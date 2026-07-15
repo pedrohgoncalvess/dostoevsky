@@ -1,9 +1,9 @@
 from database.operations.interface import Interface
 from database.operations.ai import (
     AgentRepository,
-    LocalVoiceRepository,
     ModelPriceRepository,
     ModelRepository,
+    VoiceRepository,
 )
 from database.operations.base import RefreshRepository, UserRepository
 from database.operations.conf import StudyPlanRepository, UserAgentPreferenceRepository, UserPreferenceRepository
@@ -20,7 +20,6 @@ __all__ = [
     "Interface",
     "InteractionMediaRepository",
     "InteractionRepository",
-    "LocalVoiceRepository",
     "MediaRepository",
     "MessageRepository",
     "ModelPriceRepository",
@@ -31,4 +30,5 @@ __all__ = [
     "UserAgentPreferenceRepository",
     "UserPreferenceRepository",
     "UserRepository",
+    "VoiceRepository",
 ]

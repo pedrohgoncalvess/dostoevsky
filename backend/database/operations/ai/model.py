@@ -10,8 +10,8 @@ class ModelRepository(Interface[Model]):
     def __init__(self, db):
         super().__init__(Model, db)
 
-    async def find_by_openrouter_id(self, openrouter_id: str) -> Optional[Model]:
-        return await self.find_one_by(openrouter_id=openrouter_id, deleted_at=None)
+    async def find_by_external_id(self, external_id: str) -> Optional[Model]:
+        return await self.find_one_by(external_id=external_id, deleted_at=None)
 
     async def find_first_text_model(self) -> Optional[Model]:
         result = await self.db.execute(
@@ -58,8 +58,8 @@ class ModelRepository(Interface[Model]):
         )
         return result.scalars().first()
 
-    async def find_chat_model(self, preferred_openrouter_id: str) -> Optional[Model]:
-        model = await self.find_by_openrouter_id(preferred_openrouter_id)
+    async def find_chat_model(self, preferred_external_id: str) -> Optional[Model]:
+        model = await self.find_by_external_id(preferred_external_id)
         if model:
             return model
         return await self.find_first_text_model()

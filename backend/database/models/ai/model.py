@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, Numeric, Text, func
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, Numeric, String, Text, func
 from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import relationship
 
@@ -15,19 +15,20 @@ class Model(Base):
     public_id = Column(UUID(as_uuid=True), nullable=False, unique=True, default=uuid.uuid4)
     name = Column(Text, nullable=False)
     evaluation = Column(Text, nullable=True)
-    openrouter_id = Column(Text, nullable=False)
+    type = Column(String(50), nullable=False, default="openrouter")
+    external_id = Column(Text, nullable=False)
     for_embedding = Column(Boolean, nullable=False, default=False)
     for_text = Column(Boolean, nullable=False, default=False)
     for_tts = Column(Boolean, nullable=False, default=False)
     for_stt = Column(Boolean, nullable=False, default=False)
     for_planning = Column(Boolean, nullable=False, default=False)
-    voices = Column(ARRAY(Text), nullable=True)
+    download_status = Column(String(20), nullable=False, default="completed")
     inserted_at = Column(DateTime, nullable=False, default=func.now())
     deleted_at = Column(DateTime, nullable=True)
 
     prices = relationship("ModelPrice", back_populates="model")
     agents = relationship("Agent", back_populates="model")
-    local_voices = relationship("LocalVoice", back_populates="model")
+    voice_entries = relationship("Voice", back_populates="model")
 
 
 class ModelPrice(Base):

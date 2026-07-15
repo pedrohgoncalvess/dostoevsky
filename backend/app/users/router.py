@@ -25,8 +25,8 @@ async def _create_default_preferences(conn, user_id: int) -> None:
     creates their first study plan.
     """
     model_repo = ModelRepository(conn)
-    stt_model = await model_repo.find_by_openrouter_id("local:faster-whisper")
-    tts_model = await model_repo.find_by_openrouter_id("local:kokoro")
+    stt_model = await model_repo.find_by_external_id("local:faster-whisper")
+    tts_model = await model_repo.find_by_external_id("local:kokoro")
 
     preference = UserPreference(
         user_id=user_id,
