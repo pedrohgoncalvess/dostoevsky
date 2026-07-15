@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import ENUM, UUID
 from sqlalchemy.orm import relationship
 
@@ -31,6 +31,7 @@ class StudyPlan(Base):
     study_language = Column(LanguageEnum, nullable=False)
     self_declared_level = Column(KnowledgeLevelEnum, nullable=False)
     goal = Column(Text, nullable=True)
+    setup_completed = Column(Boolean, nullable=False, default=False)
     inserted_at = Column(DateTime, nullable=False, default=func.now())
     deleted_at = Column(DateTime, nullable=True)
 

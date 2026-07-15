@@ -18,6 +18,7 @@ class StudyPlanRepository(Interface[StudyPlan]):
         study_language: str,
         self_declared_level: str,
         goal: str | None = None,
+        setup_completed: bool = False,
     ) -> StudyPlan:
         return await self.insert(
             StudyPlan(
@@ -25,6 +26,7 @@ class StudyPlanRepository(Interface[StudyPlan]):
                 study_language=study_language,
                 self_declared_level=self_declared_level,
                 goal=goal,
+                setup_completed=setup_completed,
             )
         )
 
