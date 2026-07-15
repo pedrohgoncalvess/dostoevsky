@@ -48,6 +48,7 @@ export interface StudyPlan {
 	study_language: Language;
 	self_declared_level: KnowledgeLevel;
 	goal: string | null;
+	setup_completed: boolean;
 	inserted_at: string;
 	deleted_at: string | null;
 }

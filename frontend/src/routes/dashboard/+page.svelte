@@ -4,17 +4,15 @@
 	import { onMount } from 'svelte';
 	import {
 		createInteraction,
-		createStudyPlan,
-		deleteStudyPlan,
 		listInteractions,
 		listProfiles,
 		listStudyPlans
 	} from '$lib/api';
 	import { isAuthenticated } from '$lib/auth';
 	import { t, formatDate } from '$lib/i18n';
+	import { page } from '$app/state';
 	import NewConversationModal from '$lib/components/NewConversationModal.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
-	import StudyPlanModal from '$lib/components/StudyPlanModal.svelte';
 	import type { Interaction, Media, Profile, StudyPlan } from '$lib/types';
 
 	const mockMedias: Media[] = [
@@ -41,9 +39,7 @@
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let modalOpen = $state(false);
-	let studyPlanModalOpen = $state(false);
 	let creating = $state(false);
-	let studyPlanLoading = $state(false);
 
 	onMount(async () => {
 		if (!browser) return;
@@ -52,6 +48,13 @@
 			return;
 		}
 		loadData();
+	});
+
+	$effect(() => {
+		if (page.url.searchParams.get('action') === 'new_conversation') {
+			modalOpen = true;
+			goto('/dashboard', { replaceState: true });
+		}
 	});
 
 	async function loadData() {
@@ -95,43 +98,12 @@
 			creating = false;
 		}
 	}
-
-	async function handleCreateStudyPlan(
-		studyLanguage: string,
-		selfDeclaredLevel: string,
-		goal: string
-	) {
-		studyPlanLoading = true;
-		error = null;
-		try {
-			const plan = await createStudyPlan(studyLanguage, selfDeclaredLevel, goal);
-			studyPlans = [plan, ...studyPlans];
-		} catch (err) {
-			error = err instanceof Error ? err.message : $t('common.error');
-		} finally {
-			studyPlanLoading = false;
-		}
-	}
-
-	async function handleDeleteStudyPlan(planId: string) {
-		studyPlanLoading = true;
-		error = null;
-		try {
-			await deleteStudyPlan(planId);
-			studyPlans = studyPlans.filter((p) => p.id !== planId);
-		} catch (err) {
-			error = err instanceof Error ? err.message : $t('common.error');
-		} finally {
-			studyPlanLoading = false;
-		}
-	}
 </script>
 
 <div class="dashboard">
 	<Sidebar
 		{interactions}
 		onOpenNewConversation={() => (modalOpen = true)}
-		onOpenStudyPlans={() => (studyPlanModalOpen = true)}
 	/>
 
 	{#if modalOpen}
@@ -142,16 +114,6 @@
 			loading={creating}
 			onStart={handleStartConversation}
 			onClose={() => (modalOpen = false)}
-		/>
-	{/if}
-
-	{#if studyPlanModalOpen}
-		<StudyPlanModal
-			plans={studyPlans}
-			loading={studyPlanLoading}
-			onCreate={handleCreateStudyPlan}
-			onDelete={handleDeleteStudyPlan}
-			onClose={() => (studyPlanModalOpen = false)}
 		/>
 	{/if}
 

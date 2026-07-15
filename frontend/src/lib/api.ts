@@ -1,4 +1,4 @@
-import { getAccessToken } from './auth';
+import { getAccessToken, getRefreshToken, saveTokens, logout } from './auth';
 import type { Interaction, Message, Profile, StudyPlan, TokenResponse, User } from './types';
 
 const API_BASE_URL = '/api';
@@ -29,6 +29,59 @@ async function handleResponse<T>(response: Response): Promise<T> {
 	return response.json() as Promise<T>;
 }
 
+let refreshPromise: Promise<boolean> | null = null;
+
+async function refreshTokenApi(): Promise<boolean> {
+	const refresh_token = getRefreshToken();
+	if (!refresh_token) return false;
+
+	try {
+		const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ refresh_token })
+		});
+
+		if (response.ok) {
+			const tokens = await response.json() as TokenResponse;
+			saveTokens(tokens);
+			return true;
+		}
+	} catch (err) {
+		// ignore
+	}
+	
+	return false;
+}
+
+export async function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
+	let response = await fetch(url, {
+		...options,
+		headers: { ...getHeaders(), ...options.headers }
+	});
+
+	if (response.status === 401) {
+		if (!refreshPromise) {
+			refreshPromise = refreshTokenApi().finally(() => {
+				refreshPromise = null;
+			});
+		}
+
+		const success = await refreshPromise;
+		
+		if (success) {
+			response = await fetch(url, {
+				...options,
+				headers: { ...getHeaders(), ...options.headers }
+			});
+		} else {
+			logout();
+		}
+	}
+
+	return response;
+}
+
 function mapPublicId<T extends { public_id: string }>(
 	item: T
 ): Omit<T, 'public_id'> & { id: string } {
@@ -46,24 +99,18 @@ export async function login(email: string, password: string): Promise<TokenRespo
 }
 
 export async function getMe(): Promise<User> {
-	const response = await fetch(`${API_BASE_URL}/users/me`, {
-		headers: getHeaders()
-	});
+	const response = await apiFetch(`${API_BASE_URL}/users/me`);
 	return handleResponse<User>(response);
 }
 
 export async function listProfiles(): Promise<Profile[]> {
-	const response = await fetch(`${API_BASE_URL}/profiles`, {
-		headers: getHeaders()
-	});
+	const response = await apiFetch(`${API_BASE_URL}/profiles`);
 	const data = await handleResponse<Array<{ public_id: string } & Omit<Profile, 'id'>>>(response);
 	return data.map(mapPublicId);
 }
 
 export async function listInteractions(limit = 20): Promise<Interaction[]> {
-	const response = await fetch(`${API_BASE_URL}/conversation/interactions?limit=${limit}`, {
-		headers: getHeaders()
-	});
+	const response = await apiFetch(`${API_BASE_URL}/conversation/interactions?limit=${limit}`);
 	const data =
 		await handleResponse<Array<{ public_id: string } & Omit<Interaction, 'id'>>>(response);
 	return data.map(mapPublicId);
@@ -75,9 +122,8 @@ export async function createInteraction(
 	name?: string,
 	needTip?: boolean
 ): Promise<Interaction> {
-	const response = await fetch(`${API_BASE_URL}/conversation/interactions`, {
+	const response = await apiFetch(`${API_BASE_URL}/conversation/interactions`, {
 		method: 'POST',
-		headers: getHeaders(),
 		body: JSON.stringify({
 			profile_public_id: profileId,
 			study_plan_public_id: studyPlanId,
@@ -90,22 +136,18 @@ export async function createInteraction(
 }
 
 export async function listMessages(interactionId: string): Promise<Message[]> {
-	const response = await fetch(
-		`${API_BASE_URL}/conversation/interactions/${interactionId}/messages`,
-		{
-			headers: getHeaders()
-		}
+	const response = await apiFetch(
+		`${API_BASE_URL}/conversation/interactions/${interactionId}/messages`
 	);
 	const data = await handleResponse<Array<{ public_id: string } & Omit<Message, 'id'>>>(response);
 	return data.map(mapPublicId);
 }
 
 export async function sendTextMessage(interactionId: string, text: string): Promise<Message> {
-	const response = await fetch(
+	const response = await apiFetch(
 		`${API_BASE_URL}/conversation/interactions/${interactionId}/messages`,
 		{
 			method: 'POST',
-			headers: getHeaders(),
 			body: JSON.stringify({ text })
 		}
 	);
@@ -121,9 +163,7 @@ export function getConversationWebSocketUrl(interactionId: string): string {
 }
 
 export async function listStudyPlans(): Promise<StudyPlan[]> {
-	const response = await fetch(`${API_BASE_URL}/study-plans`, {
-		headers: getHeaders()
-	});
+	const response = await apiFetch(`${API_BASE_URL}/study-plans`);
 	const data = await handleResponse<Array<{ public_id: string } & Omit<StudyPlan, 'id'>>>(response);
 	return data.map(mapPublicId);
 }
@@ -132,27 +172,28 @@ export async function createStudyPlan(
 	studyLanguage: string,
 	selfDeclaredLevel: string,
 	goal?: string
-): Promise<StudyPlan> {
-	const response = await fetch(`${API_BASE_URL}/study-plans`, {
+): Promise<{ plan: StudyPlan; feedback: string | null }> {
+	const response = await apiFetch(`${API_BASE_URL}/study-plans`, {
 		method: 'POST',
-		headers: getHeaders(),
 		body: JSON.stringify({
 			study_language: studyLanguage,
 			self_declared_level: selfDeclaredLevel,
 			goal
 		})
 	});
-	const data = await handleResponse<{ public_id: string } & Omit<StudyPlan, 'id'>>(response);
-	return mapPublicId(data);
+	const data = await handleResponse<{
+		plan: { public_id: string } & Omit<StudyPlan, 'id'>;
+		feedback: string | null;
+	}>(response);
+	return { plan: mapPublicId(data.plan), feedback: data.feedback };
 }
 
 export async function updateStudyPlan(
 	studyPlanId: string,
 	updates: Partial<Pick<StudyPlan, 'study_language' | 'self_declared_level' | 'goal'>>
 ): Promise<StudyPlan> {
-	const response = await fetch(`${API_BASE_URL}/study-plans/${studyPlanId}`, {
+	const response = await apiFetch(`${API_BASE_URL}/study-plans/${studyPlanId}`, {
 		method: 'PATCH',
-		headers: getHeaders(),
 		body: JSON.stringify(updates)
 	});
 	const data = await handleResponse<{ public_id: string } & Omit<StudyPlan, 'id'>>(response);
@@ -160,9 +201,8 @@ export async function updateStudyPlan(
 }
 
 export async function deleteStudyPlan(studyPlanId: string): Promise<void> {
-	const response = await fetch(`${API_BASE_URL}/study-plans/${studyPlanId}`, {
-		method: 'DELETE',
-		headers: getHeaders()
+	const response = await apiFetch(`${API_BASE_URL}/study-plans/${studyPlanId}`, {
+		method: 'DELETE'
 	});
 	await handleResponse<{ deleted: boolean }>(response);
 }
