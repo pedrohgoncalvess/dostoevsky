@@ -19,7 +19,8 @@ export const translations = {
 			passwordPlaceholder: '••••••••',
 			submit: 'Sign in',
 			submitting: 'Signing in...',
-			failure: 'Sign in failed'
+			failure: 'Sign in failed',
+			lede: 'Conversation, not conjugation.'
 		},
 		dashboard: {
 			eyebrow: 'Dashboard',
@@ -36,6 +37,8 @@ export const translations = {
 			newConversation: 'New conversation',
 			loading: 'Loading messages...',
 			empty: 'Send a message or hold the microphone to start practicing.',
+			emptyTitle: 'Begin the session',
+			selectOrCreate: 'Select a conversation or start a new one.',
 			inputPlaceholder: 'Type your message...',
 			send: 'Send',
 			sending: 'Responding...',
@@ -74,7 +77,11 @@ export const translations = {
 			studyPlanGoal: 'Goal',
 			createStudyPlan: 'Create',
 			editStudyPlan: 'Edit',
-			deleteStudyPlan: 'Delete'
+			deleteStudyPlan: 'Delete',
+			settings: 'Settings',
+			audioModels: 'Audio models',
+			agents: 'Agents',
+			account: 'Account'
 		},
 		modal: {
 			newConversationTitle: 'Start new conversation',
@@ -84,6 +91,7 @@ export const translations = {
 			mediaLabel: 'Media',
 			mediaHint: 'Optional. Select media to use as context.',
 			startConversation: 'Start conversation',
+			modelsDownloading: 'The audio models for this language are currently downloading in the background. Please wait a few minutes before starting.',
 			studyPlanLabel: 'Study plan',
 			selectStudyPlan: 'Select a study plan',
 			noStudyPlansModal: 'No study plans available. Create one first.',
@@ -116,7 +124,8 @@ export const translations = {
 			passwordPlaceholder: '••••••••',
 			submit: 'Entrar',
 			submitting: 'Entrando...',
-			failure: 'Falha no login'
+			failure: 'Falha no login',
+			lede: 'Conversação, não conjugação.'
 		},
 		dashboard: {
 			eyebrow: 'Dashboard',
@@ -133,6 +142,8 @@ export const translations = {
 			newConversation: 'Nova conversação',
 			loading: 'Carregando mensagens...',
 			empty: 'Envie uma mensagem ou segure o microfone para começar a prática.',
+			emptyTitle: 'Inicie a sessão',
+			selectOrCreate: 'Selecione uma conversa ou inicie uma nova.',
 			inputPlaceholder: 'Digite sua mensagem...',
 			send: 'Enviar',
 			sending: 'Respondendo...',
@@ -171,7 +182,11 @@ export const translations = {
 			studyPlanGoal: 'Objetivo',
 			createStudyPlan: 'Criar',
 			editStudyPlan: 'Editar',
-			deleteStudyPlan: 'Excluir'
+			deleteStudyPlan: 'Excluir',
+			settings: 'Configurações',
+			audioModels: 'Modelos de áudio',
+			agents: 'Agentes',
+			account: 'Conta'
 		},
 		modal: {
 			newConversationTitle: 'Iniciar nova conversação',
@@ -181,6 +196,7 @@ export const translations = {
 			mediaLabel: 'Mídia',
 			mediaHint: 'Opcional. Selecione mídias para usar como contexto.',
 			startConversation: 'Iniciar conversação',
+			modelsDownloading: 'Os modelos de áudio para este idioma estão sendo baixados em segundo plano. Por favor, aguarde alguns minutos antes de iniciar.',
 			studyPlanLabel: 'Plano de estudo',
 			selectStudyPlan: 'Selecione um plano de estudo',
 			noStudyPlansModal: 'Nenhum plano de estudo disponível. Crie um primeiro.',

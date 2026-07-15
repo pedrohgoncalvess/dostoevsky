@@ -5,17 +5,28 @@
 		bars?: number;
 	}
 
-	let { active = false, variant = 'ai', bars = 8 }: Props = $props();
+	let { active = false, variant = 'ai', bars = 12 }: Props = $props();
 
-	function heights(index: number): string {
-		const base = [6, 14, 9, 18, 7, 12, 5, 16];
-		return `${base[index % base.length]}px`;
+	// Organic height pattern — center bars taller, edges shorter
+	const heightPattern = [4, 7, 11, 16, 9, 14, 18, 14, 9, 16, 11, 7];
+
+	function height(index: number): string {
+		return `${heightPattern[index % heightPattern.length]}px`;
 	}
+
+	// Staggered delays for natural feel
+	const delays = [0, 0.12, 0.24, 0.06, 0.32, 0.18, 0.08, 0.28, 0.16, 0.04, 0.22, 0.36];
 </script>
 
-<div class="wave" class:active class:user={variant === 'user'} class:ai={variant === 'ai'}>
+<div
+	class="wave"
+	class:active
+	class:user={variant === 'user'}
+	class:ai={variant === 'ai'}
+	aria-hidden="true"
+>
 	{#each Array.from({ length: bars }, (_, i) => i) as bar (bar)}
-		<span style="height: {heights(bar)}"></span>
+		<span style="height: {height(bar)}; animation-delay: {delays[bar % delays.length]}s"></span>
 	{/each}
 </div>
 
@@ -25,13 +36,14 @@
 		align-items: flex-end;
 		gap: 2px;
 		height: 20px;
+		opacity: 0.7;
 	}
 
 	.wave span {
 		width: 2px;
 		background: var(--color-border-strong);
-		border-radius: 1px;
-		transition: height var(--duration-fast) var(--ease-standard);
+		border-radius: var(--radius-pill);
+		transition: height var(--duration-base) var(--ease-standard);
 	}
 
 	.wave.user span {
@@ -42,39 +54,20 @@
 		background: var(--color-voice-ai);
 	}
 
+	.wave.active {
+		opacity: 1;
+	}
+
 	.wave.active span {
-		animation: pulse var(--duration-waveform) ease-in-out infinite;
+		animation: wave-bar var(--duration-waveform) ease-in-out infinite;
 	}
 
-	.wave.active span:nth-child(2) {
-		animation-delay: 0.1s;
-	}
-	.wave.active span:nth-child(3) {
-		animation-delay: 0.2s;
-	}
-	.wave.active span:nth-child(4) {
-		animation-delay: 0.3s;
-	}
-	.wave.active span:nth-child(5) {
-		animation-delay: 0.15s;
-	}
-	.wave.active span:nth-child(6) {
-		animation-delay: 0.25s;
-	}
-	.wave.active span:nth-child(7) {
-		animation-delay: 0.05s;
-	}
-	.wave.active span:nth-child(8) {
-		animation-delay: 0.35s;
-	}
-
-	@keyframes pulse {
-		0%,
-		100% {
+	@keyframes wave-bar {
+		0%, 100% {
 			transform: scaleY(1);
 		}
 		50% {
-			transform: scaleY(0.4);
+			transform: scaleY(0.35);
 		}
 	}
 </style>

@@ -7,32 +7,23 @@
 
 	let { status }: Props = $props();
 
-	const labels: Record<ChatStatus, string> = {
-		idle: 'Pronto',
-		connecting: 'Conectando',
-		listening: 'Escutando',
-		recording: 'Gravando',
-		processing: 'Processando',
-		responding: 'Respondendo',
-		error: 'Erro',
-		closed: 'Desconectado'
+	const config: Record<ChatStatus, { label: string; cls: string }> = {
+		idle: { label: 'Pronto', cls: 'idle' },
+		connecting: { label: 'Conectando', cls: 'active' },
+		listening: { label: 'Escutando', cls: 'active' },
+		recording: { label: 'Gravando', cls: 'recording' },
+		processing: { label: 'Processando', cls: 'processing' },
+		responding: { label: 'Respondendo', cls: 'processing' },
+		error: { label: 'Erro', cls: 'error' },
+		closed: { label: 'Desconectado', cls: 'muted' }
 	};
 
-	const statusClass: Record<ChatStatus, string> = {
-		idle: 'status--idle',
-		connecting: 'status--connecting',
-		listening: 'status--listening',
-		recording: 'status--recording',
-		processing: 'status--processing',
-		responding: 'status--responding',
-		error: 'status--error',
-		closed: 'status--closed'
-	};
+	const current = $derived(config[status] ?? config.idle);
 </script>
 
-<div class="status {statusClass[status]}">
-	<span class="dot"></span>
-	<span class="label">{labels[status]}</span>
+<div class="status status--{current.cls}" role="status" aria-live="polite">
+	<span class="dot" aria-hidden="true"></span>
+	<span class="label">{current.label}</span>
 </div>
 
 <style>
@@ -40,49 +31,74 @@
 		display: inline-flex;
 		align-items: center;
 		gap: var(--space-2);
-		font: var(--text-caption);
-		color: var(--color-text-secondary);
+		font: 500 0.6875rem var(--font-body);
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: var(--color-text-muted);
+		transition: color var(--duration-base) var(--ease-standard);
 	}
 
 	.dot {
-		width: 8px;
-		height: 8px;
+		width: 6px;
+		height: 6px;
 		border-radius: var(--radius-pill);
-		background: var(--color-text-muted);
+		background: var(--color-border-strong);
+		flex-shrink: 0;
+		transition: background var(--duration-base) var(--ease-standard);
 	}
 
+	/* idle — verdigris dim */
 	.status--idle .dot {
 		background: var(--color-success);
+		opacity: 0.7;
+	}
+	.status--idle {
+		color: var(--color-text-muted);
 	}
 
-	.status--connecting .dot,
-	.status--listening .dot,
-	.status--recording .dot {
+	/* active (connecting, listening) — gilt pulse */
+	.status--active .dot {
 		background: var(--color-warning);
-		animation: blink 1.2s ease-in-out infinite;
+		animation: pulse-dot 1.4s ease-in-out infinite;
+	}
+	.status--active {
+		color: var(--color-warning);
 	}
 
-	.status--processing .dot,
-	.status--responding .dot {
+	/* recording — oxblood pulse */
+	.status--recording .dot {
+		background: var(--color-voice-user);
+		animation: pulse-dot 0.9s ease-in-out infinite;
+	}
+	.status--recording {
+		color: var(--color-voice-user-soft);
+	}
+
+	/* processing / responding — verdigris pulse */
+	.status--processing .dot {
 		background: var(--color-voice-ai);
-		animation: blink 1.2s ease-in-out infinite;
+		animation: pulse-dot 1.1s ease-in-out infinite;
+	}
+	.status--processing {
+		color: var(--color-voice-ai-soft);
 	}
 
+	/* error */
 	.status--error .dot {
 		background: var(--color-danger);
 	}
-
-	.status--closed .dot {
-		background: var(--color-text-muted);
+	.status--error {
+		color: var(--raw-oxblood-400);
 	}
 
-	@keyframes blink {
-		0%,
-		100% {
-			opacity: 1;
-		}
-		50% {
-			opacity: 0.4;
-		}
+	/* muted / closed */
+	.status--muted .dot {
+		background: var(--color-border-strong);
+		opacity: 0.5;
+	}
+
+	@keyframes pulse-dot {
+		0%, 100% { opacity: 1; transform: scale(1); }
+		50% { opacity: 0.4; transform: scale(0.85); }
 	}
 </style>
