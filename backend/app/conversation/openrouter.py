@@ -1,6 +1,7 @@
 import base64
 import io
 import json
+import logging
 import wave
 from typing import Any
 
@@ -8,18 +9,46 @@ import httpx
 
 from utils import get_env_var
 
+logger = logging.getLogger(__name__)
+
 
 class OpenRouterError(RuntimeError):
     pass
 
 
 class OpenRouterClient:
+    """
+    Thin async wrapper around the OpenRouter HTTP API.
+
+    A single ``httpx.AsyncClient`` is shared for the lifetime of this instance
+    so that TCP/TLS connections are reused across calls (keepalive pool).
+    Use this class as an async context manager when you need explicit lifecycle
+    control, or just instantiate it — the client will be closed when the
+    instance is garbage-collected.
+    """
+
     def __init__(self) -> None:
         self.api_key = get_env_var("OPENROUTER_API_KEY")
         self.base_url = get_env_var("OPENROUTER_BASE_URL") or "https://openrouter.ai/api/v1"
 
         if not self.api_key:
             raise OpenRouterError("OPENROUTER_API_KEY is not configured.")
+
+        # Shared client — reuses TCP connections and TLS sessions.
+        self._client = httpx.AsyncClient(
+            base_url=self.base_url,
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            timeout=90,
+        )
+
+    async def aclose(self) -> None:
+        await self._client.aclose()
+
+    async def __aenter__(self) -> "OpenRouterClient":
+        return self
+
+    async def __aexit__(self, *_) -> None:
+        await self.aclose()
 
     async def transcribe(
         self,
@@ -66,12 +95,12 @@ class OpenRouterClient:
         return choices[0].get("message", {}).get("content", "")
 
     async def chat(self, messages: list[dict[str, str]], model: str, session_id: str) -> str:
+        logger.info("OpenRouter chat payload: %s", messages)
         response = await self._json_request(
             "/chat/completions",
             {
                 "model": model,
                 "messages": messages,
-                "session_id": session_id,
                 "stream": False,
             },
         )
@@ -104,16 +133,16 @@ class OpenRouterClient:
         json_schema: dict[str, Any],
         session_id: str,
     ) -> dict[str, Any]:
-        response = await self._json_request(
-            "/chat/completions",
-            {
-                "model": model,
-                "messages": messages,
-                "session_id": session_id,
-                "stream": False,
-                "response_format": json_schema,
-            },
-        )
+        logger.info("OpenRouter chat_structured payload: %s", messages)
+        payload: dict[str, Any] = {
+            "model": model,
+            "messages": messages,
+            "stream": False,
+        }
+        if json_schema:
+            payload["response_format"] = json_schema
+
+        response = await self._json_request("/chat/completions", payload)
         choices = response.get("choices") or []
         if not choices:
             return {}
@@ -147,22 +176,17 @@ class OpenRouterClient:
             raise OpenRouterError(f"Invalid JSON response from OpenRouter: {exc}") from exc
 
     async def _bytes_request(self, path: str, payload: dict[str, Any]) -> bytes:
-        async with httpx.AsyncClient(timeout=90) as client:
-            try:
-                response = await client.post(
-                    f"{self.base_url}{path}",
-                    json=payload,
-                    headers={"Authorization": f"Bearer {self.api_key}"},
-                )
-                response.raise_for_status()
-                return response.content
-            except httpx.HTTPStatusError as exc:
-                body = exc.response.text
-                raise OpenRouterError(
-                    f"OpenRouter error {exc.response.status_code}: {body}"
-                ) from exc
-            except httpx.RequestError as exc:
-                raise OpenRouterError(f"OpenRouter connection error: {exc}") from exc
+        try:
+            response = await self._client.post(path, json=payload)
+            response.raise_for_status()
+            return response.content
+        except httpx.HTTPStatusError as exc:
+            body = exc.response.text
+            raise OpenRouterError(
+                f"OpenRouter error {exc.response.status_code}: {body}"
+            ) from exc
+        except httpx.RequestError as exc:
+            raise OpenRouterError(f"OpenRouter connection error: {exc}") from exc
 
 
 def _pcm_to_wav(

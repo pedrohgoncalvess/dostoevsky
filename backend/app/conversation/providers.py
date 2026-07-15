@@ -86,6 +86,9 @@ class FasterWhisperSTTProvider(STTProvider):
     """Local STT using faster-whisper (CTranslate2-based Whisper)."""
 
     _model = None
+    # Lock serialises the first load so only one thread initialises the model
+    # even when multiple async tasks arrive before the model is ready.
+    _lock = asyncio.Lock()
 
     def __init__(
         self,
@@ -97,16 +100,31 @@ class FasterWhisperSTTProvider(STTProvider):
         self.device = device or get_env_var("LOCAL_STT_DEVICE") or "auto"
         self.compute_type = compute_type or get_env_var("LOCAL_STT_COMPUTE_TYPE") or "default"
 
-    def _load_model(self):
-        if FasterWhisperSTTProvider._model is None:
-            logger.info("Loading faster-whisper model: %s", self.model_size)
-            from faster_whisper import WhisperModel
+    async def _ensure_model(self):
+        """Load the model exactly once, safely, across concurrent callers."""
+        if FasterWhisperSTTProvider._model is not None:
+            return FasterWhisperSTTProvider._model
 
-            FasterWhisperSTTProvider._model = WhisperModel(
-                self.model_size,
-                device=self.device,
-                compute_type=self.compute_type,
-            )
+        async with FasterWhisperSTTProvider._lock:
+            # Double-check after acquiring the lock.
+            if FasterWhisperSTTProvider._model is None:
+                logger.info("Loading faster-whisper model: %s", self.model_size)
+                model_size = self.model_size
+                device = self.device
+                compute_type = self.compute_type
+
+                def _load():
+                    from faster_whisper import WhisperModel
+                    cache_dir = get_env_var("LOCAL_MODELS_DIR") or "models"
+                    return WhisperModel(
+                        model_size,
+                        device=device,
+                        compute_type=compute_type,
+                        download_root=cache_dir
+                    )
+
+                FasterWhisperSTTProvider._model = await asyncio.to_thread(_load)
+
         return FasterWhisperSTTProvider._model
 
     async def transcribe(
@@ -125,7 +143,7 @@ class FasterWhisperSTTProvider(STTProvider):
             tmp_path = tmp.name
 
         try:
-            model = await asyncio.to_thread(self._load_model)
+            model = await self._ensure_model()
             segments, _info = await asyncio.to_thread(
                 lambda: list(model.transcribe(tmp_path, language=language)),
             )
@@ -141,7 +159,11 @@ def ensure_kokoro_model_files(
     model_path: str | None = None,
     voices_path: str | None = None,
 ) -> tuple[str, str]:
-    """Download Kokoro ONNX model and voices bin if not already present."""
+    """Download Kokoro ONNX model and voices bin if not already present.
+
+    This function is intentionally synchronous because it is always called
+    inside ``asyncio.to_thread``; do not call it directly from an async context.
+    """
     if model_path and voices_path:
         return model_path, voices_path
 
@@ -178,6 +200,8 @@ class KokoroTTSProvider(TTSProvider):
     """Local TTS using Kokoro via ONNX Runtime (kokoro-onnx)."""
 
     _kokoro = None
+    # Separate lock for Kokoro to avoid contention with whisper loads.
+    _lock = asyncio.Lock()
 
     def __init__(
         self,
@@ -191,15 +215,24 @@ class KokoroTTSProvider(TTSProvider):
         self.voice = voice or get_env_var("LOCAL_TTS_VOICE") or "af_heart"
         self.lang = lang or get_env_var("LOCAL_TTS_LANG")
 
-    def _load_kokoro(self):
-        if KokoroTTSProvider._kokoro is None:
-            model_path, voices_path = ensure_kokoro_model_files(
-                self.model_path, self.voices_path
-            )
-            logger.info("Loading Kokoro ONNX model from %s", model_path)
-            from kokoro_onnx import Kokoro
+    async def _ensure_kokoro(self):
+        """Load Kokoro exactly once, safely, across concurrent callers."""
+        if KokoroTTSProvider._kokoro is not None:
+            return KokoroTTSProvider._kokoro
 
-            KokoroTTSProvider._kokoro = Kokoro(model_path, voices_path)
+        async with KokoroTTSProvider._lock:
+            if KokoroTTSProvider._kokoro is None:
+                model_path = self.model_path
+                voices_path = self.voices_path
+
+                def _load():
+                    mp, vp = ensure_kokoro_model_files(model_path, voices_path)
+                    logger.info("Loading Kokoro ONNX model from %s", mp)
+                    from kokoro_onnx import Kokoro
+                    return Kokoro(mp, vp)
+
+                KokoroTTSProvider._kokoro = await asyncio.to_thread(_load)
+
         return KokoroTTSProvider._kokoro
 
     async def speech(
@@ -211,7 +244,7 @@ class KokoroTTSProvider(TTSProvider):
         if not text:
             return b""
 
-        kokoro = await asyncio.to_thread(self._load_kokoro)
+        kokoro = await self._ensure_kokoro()
         chosen_voice = voice or self.voice
         lang = self.lang or _kokoro_lang_from_voice(chosen_voice)
 
@@ -248,24 +281,24 @@ class AudioProviderFactory:
         self._local_tts: KokoroTTSProvider | None = None
 
     def stt_provider(self, model: Model) -> STTProvider:
-        openrouter_id = model.openrouter_id
-        if openrouter_id.startswith("local:"):
+        external_id = model.external_id
+        if model.type == "local" or external_id.startswith("local:"):
             if self._local_stt is None:
                 self._local_stt = FasterWhisperSTTProvider()
             return self._local_stt
 
-        if openrouter_id not in self._openrouter_stt:
-            self._openrouter_stt[openrouter_id] = OpenRouterSTTProvider(openrouter_id)
-        return self._openrouter_stt[openrouter_id]
+        if external_id not in self._openrouter_stt:
+            self._openrouter_stt[external_id] = OpenRouterSTTProvider(external_id)
+        return self._openrouter_stt[external_id]
 
     def tts_provider(self, model: Model, voice: str | None = None) -> TTSProvider:
-        openrouter_id = model.openrouter_id
-        if openrouter_id.startswith("local:"):
+        external_id = model.external_id
+        if model.type == "local" or external_id.startswith("local:"):
             if self._local_tts is None:
                 self._local_tts = KokoroTTSProvider()
             return self._local_tts
 
-        key = f"{openrouter_id}:{voice}"
+        key = f"{external_id}:{voice}"
         if key not in self._openrouter_tts:
-            self._openrouter_tts[key] = OpenRouterTTSProvider(openrouter_id, voice or "tara")
+            self._openrouter_tts[key] = OpenRouterTTSProvider(external_id, voice or "tara")
         return self._openrouter_tts[key]

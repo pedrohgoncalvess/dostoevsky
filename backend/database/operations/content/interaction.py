@@ -1,7 +1,7 @@
 import uuid
 from typing import Any, Optional
 
-from sqlalchemy import select
+from sqlalchemy import desc, select
 
 from database.models.content import Interaction, Profile
 from database.operations import Interface
@@ -61,6 +61,24 @@ class InteractionRepository(Interface[Interaction]):
                 need_tip=need_tip,
             )
         )
+
+    async def find_recent_by_user(
+        self,
+        user_id: int,
+        limit: int = 20,
+    ) -> list[Interaction]:
+        """Return the *limit* most recent interactions for a user, ordered by
+        ``inserted_at DESC`` (falling back to ``id DESC``) — all in SQL."""
+        result = await self.db.execute(
+            select(self.model)
+            .where(self.model.user_id == user_id)
+            .order_by(
+                desc(self.model.inserted_at),
+                desc(self.model.id),
+            )
+            .limit(limit)
+        )
+        return list(result.scalars().all())
 
     async def find_with_profile(self, interaction_id: int) -> tuple[Interaction, Profile] | None:
         result = await self.db.execute(

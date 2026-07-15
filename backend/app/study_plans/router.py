@@ -1,7 +1,7 @@
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 
 from app.auth.services import get_current_user
 
@@ -18,6 +18,7 @@ router = APIRouter(prefix="/study-plans")
 @router.post("")
 async def create_study_plan(
     payload: dict[str, Any],
+    background_tasks: BackgroundTasks,
     user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
     study_language = (payload.get("study_language") or "").strip()
@@ -41,17 +42,45 @@ async def create_study_plan(
             study_language=study_language,
             self_declared_level=self_declared_level,
             goal=goal,
+            setup_completed=False,
         )
 
-    # Trigger download/selection of local STT/TTS assets only when the user
-    # creates their first study plan. This avoids downloading any voice/model
-    # during registration.
-    try:
-        await ensure_local_models_for_study_plan(user.id, study_language)
-    except Exception:
-        logger.exception("Failed to activate local models for study plan")
+    background_tasks.add_task(
+        background_download_models, user.id, study_language, plan.id
+    )
 
-    return _serialize(plan)
+    return {"plan": _serialize(plan), "feedback": "Download initiated"}
+
+async def background_download_models(user_id: int, study_language: str, plan_id: int):
+    try:
+        from app.conversation.local_model_manager import ensure_local_models_for_study_plan
+        from app.conversation.providers import FasterWhisperSTTProvider
+        
+        await ensure_local_models_for_study_plan(user_id, study_language)
+        async with DatabaseConnection() as conn:
+            from database.operations.ai import ModelRepository
+            import asyncio
+            model_repo = ModelRepository(conn)
+            whisper_model = await model_repo.find_first_stt_model()
+            if whisper_model and whisper_model.download_status != "downloaded":
+                if whisper_model.download_status == "processing":
+                    while whisper_model.download_status == "processing":
+                        await asyncio.sleep(2)
+                        await conn.refresh(whisper_model)
+                else:
+                    whisper_model.download_status = "processing"
+                    await conn.commit()
+                    try:
+                        await FasterWhisperSTTProvider()._ensure_model()
+                        whisper_model.download_status = "downloaded"
+                        await conn.commit()
+                    except Exception:
+                        whisper_model.download_status = "not_downloaded"
+                        await conn.commit()
+                        raise
+            await StudyPlanRepository(conn).update(plan_id, {"setup_completed": True})
+    except Exception:
+        logger.exception("Failed to activate local models in background")
 
 
 @router.get("")
@@ -141,6 +170,7 @@ def _serialize(plan) -> dict[str, Any]:
         "study_language": plan.study_language,
         "self_declared_level": plan.self_declared_level,
         "goal": plan.goal,
+        "setup_completed": plan.setup_completed,
         "inserted_at": plan.inserted_at.isoformat() if plan.inserted_at else None,
         "deleted_at": plan.deleted_at.isoformat() if plan.deleted_at else None,
     }
