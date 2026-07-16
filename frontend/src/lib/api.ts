@@ -1,5 +1,5 @@
 import { getAccessToken, getRefreshToken, saveTokens, logout } from './auth';
-import type { Interaction, Message, Profile, StudyPlan, TokenResponse, User } from './types';
+import type { Interaction, Message, Profile, StudyPlan, TokenResponse, User, Media } from './types';
 
 const API_BASE_URL = '/api';
 const PUBLIC_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
@@ -135,6 +135,24 @@ export async function createInteraction(
 	return mapPublicId(data);
 }
 
+export async function updateInteraction(
+	interactionId: string,
+	updates: { name?: string; need_tip?: boolean; media_ids?: string[] }
+): Promise<void> {
+	const response = await apiFetch(`${API_BASE_URL}/conversation/interactions/${interactionId}`, {
+		method: 'PATCH',
+		body: JSON.stringify(updates)
+	});
+	await handleResponse(response);
+}
+
+export async function deleteInteraction(interactionId: string): Promise<void> {
+	const response = await apiFetch(`${API_BASE_URL}/conversation/interactions/${interactionId}`, {
+		method: 'DELETE'
+	});
+	await handleResponse(response);
+}
+
 export async function listMessages(interactionId: string): Promise<Message[]> {
 	const response = await apiFetch(
 		`${API_BASE_URL}/conversation/interactions/${interactionId}/messages`
@@ -205,4 +223,49 @@ export async function deleteStudyPlan(studyPlanId: string): Promise<void> {
 		method: 'DELETE'
 	});
 	await handleResponse<{ deleted: boolean }>(response);
+}
+
+export async function listMedias(): Promise<Media[]> {
+	const response = await apiFetch(`${API_BASE_URL}/media/medias`);
+	const data = await handleResponse<Array<{ public_id: string } & Omit<Media, 'id'>>>(response);
+	return data.map(mapPublicId);
+}
+
+export async function uploadMedia(file: File, name?: string): Promise<Media> {
+	const formData = new FormData();
+	formData.append('file', file);
+	if (name) {
+		formData.append('name', name);
+	}
+
+	const token = getAccessToken();
+	const headers: Record<string, string> = {};
+	if (token) headers['Authorization'] = `Bearer ${token}`;
+
+	const response = await fetch(`${API_BASE_URL}/media`, {
+		method: 'POST',
+		headers,
+		body: formData
+	});
+	const data = await handleResponse<{ public_id: string } & Omit<Media, 'id'>>(response);
+	return mapPublicId(data);
+}
+
+export async function updateMedia(id: string, name?: string, description?: string): Promise<Media> {
+	const payload: Record<string, string> = {};
+	if (name !== undefined) payload.name = name;
+	if (description !== undefined) payload.description = description;
+
+	const response = await apiFetch(`${API_BASE_URL}/media/${id}`, {
+		method: 'PATCH',
+		body: JSON.stringify(payload)
+	});
+	const data = await handleResponse<{ public_id: string } & Omit<Media, 'id'>>(response);
+	return mapPublicId(data);
+}
+
+export async function deleteMedia(id: string): Promise<void> {
+	await apiFetch(`${API_BASE_URL}/media/${id}`, {
+		method: 'DELETE'
+	});
 }

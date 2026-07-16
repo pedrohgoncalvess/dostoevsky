@@ -7,7 +7,7 @@
 
 <svelte:head>
 	<link rel="icon" href={favicon} />
-	<title>Dostoevsky</title>
+	<title>DOSTOEVSKY</title>
 </svelte:head>
 
 {@render children()}

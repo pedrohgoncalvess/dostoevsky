@@ -3,7 +3,7 @@ export type Locale = 'en' | 'pt';
 export const translations = {
 	en: {
 		common: {
-			appName: 'DOSTOIEVSK',
+			appName: 'DOSTOEVSKY',
 			appNameCyrillic: 'достоевск',
 			loading: 'Loading...',
 			error: 'Error',
@@ -46,13 +46,14 @@ export const translations = {
 			messageError: 'Failed to send message',
 			createError: 'Failed to create conversation',
 			userLabel: 'You',
-			aiLabel: 'DOSTOIEVSK',
+			aiLabel: 'DOSTOEVSKY',
 			userTag: 'local · text',
 			aiTag: 'AI · edge-tts',
 			voiceChat: 'Voice chat',
 			recording: 'Listening...',
 			processingAudio: 'Processing audio...',
 			playing: 'Speaking...',
+			stillListening: 'I can still hear you...',
 			audioError: 'Audio conversation failed',
 			transcript: 'Transcript',
 			transcriptEmpty: 'Transcript will appear here as you speak.',
@@ -81,7 +82,8 @@ export const translations = {
 			settings: 'Settings',
 			audioModels: 'Audio models',
 			agents: 'Agents',
-			account: 'Account'
+			account: 'Account',
+			materials: 'Materials'
 		},
 		modal: {
 			newConversationTitle: 'Start new conversation',
@@ -104,11 +106,22 @@ export const translations = {
 			studyPlanSave: 'Save',
 			needTipLabel: 'Show response tips',
 			needTipHint: 'The assistant will suggest how to answer each turn.'
+		},
+		materials: {
+			title: 'Materials',
+			lede: 'Manage your files, documents, and media used for context in conversations.',
+			empty: 'You have no materials.',
+			uploadNew: 'Upload material',
+			name: 'Name',
+			description: 'Description (AI generated)',
+			deleteConfirm: 'Are you sure you want to delete this material?',
+			editTitle: 'Edit Material',
+			uploadTitle: 'Upload Material'
 		}
 	},
 	pt: {
 		common: {
-			appName: 'DOSTOIEVSK',
+			appName: 'DOSTOEVSKY',
 			appNameCyrillic: 'достоевск',
 			loading: 'Carregando...',
 			error: 'Erro',
@@ -151,13 +164,14 @@ export const translations = {
 			messageError: 'Erro ao enviar mensagem',
 			createError: 'Erro ao criar conversação',
 			userLabel: 'Você',
-			aiLabel: 'Достоевск',
+			aiLabel: 'DOSTOEVSKY',
 			userTag: 'local · texto',
 			aiTag: 'IA · edge-tts',
 			voiceChat: 'Chat de voz',
 			recording: 'Ouvindo...',
 			processingAudio: 'Processando áudio...',
 			playing: 'Falando...',
+			stillListening: 'Ainda posso escutar você...',
 			audioError: 'Falha na conversa de áudio',
 			transcript: 'Transcrição',
 			transcriptEmpty: 'A transcrição aparecerá aqui conforme você fala.',
@@ -186,7 +200,8 @@ export const translations = {
 			settings: 'Configurações',
 			audioModels: 'Modelos de áudio',
 			agents: 'Agentes',
-			account: 'Conta'
+			account: 'Conta',
+			materials: 'Materiais'
 		},
 		modal: {
 			newConversationTitle: 'Iniciar nova conversação',
@@ -209,6 +224,17 @@ export const translations = {
 			studyPlanSave: 'Salvar',
 			needTipLabel: 'Mostrar dicas de resposta',
 			needTipHint: 'O assistente sugerirá como responder a cada turno.'
+		},
+		materials: {
+			title: 'Materiais',
+			lede: 'Gerencie seus arquivos, documentos e mídias usados como contexto nas conversas.',
+			empty: 'Você não possui materiais.',
+			uploadNew: 'Enviar material',
+			name: 'Nome',
+			description: 'Descrição (Gerada por IA)',
+			deleteConfirm: 'Tem certeza de que deseja excluir este material?',
+			editTitle: 'Editar Material',
+			uploadTitle: 'Enviar Material'
 		}
 	}
 } as const;
