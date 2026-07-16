@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, s
 
 from app.auth.services import get_current_user
 from app.media.auth import require_admin_or_owner
-from app.media.services import delete_media, get_media, list_user_media, process_media_upload
+from app.media.services import delete_media, get_media, list_user_media, process_media_upload, update_media
 from database.models.base import User
 
 
@@ -64,6 +64,32 @@ async def retrieve_media(
     return media
 
 
+@router.get("/{media_id}/file")
+async def retrieve_media_file(
+    media_id: str,
+    _: None = Depends(require_admin_or_owner),
+    user: User = Depends(get_current_user),
+) -> Any:
+    from fastapi.responses import FileResponse
+    from app.media.storage import media_root
+
+    media = await get_media(user, media_id)
+    if not media:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Media not found.",
+        )
+    
+    file_path = media_root() / media["subpath"]
+    if not file_path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="File not found on disk.",
+        )
+        
+    return FileResponse(path=file_path, filename=media["name"])
+
+
 @router.delete("/{media_id}")
 async def remove_media(
     media_id: str,
@@ -76,3 +102,18 @@ async def remove_media(
             detail="Media not found.",
         )
     return {"deleted": True}
+
+
+@router.patch("/{media_id}")
+async def edit_media(
+    media_id: str,
+    payload: dict[str, Any],
+    user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    media = await update_media(user, media_id, payload)
+    if not media:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Media not found.",
+        )
+    return media

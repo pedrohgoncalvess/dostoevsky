@@ -17,7 +17,7 @@ async def list_profiles(user: User = Depends(get_current_user)):
         {
             "id": p.id,
             "public_id": str(p.public_id),
-            "name": p.name,
+            "name": p.name.replace("_", " ").title(),
             "description": p.description,
         }
         for p in profiles

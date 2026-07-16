@@ -111,6 +111,34 @@ async def get_media(user: User, media_id: str) -> dict[str, Any] | None:
     return _serialize(media)
 
 
+async def update_media(user: User, media_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
+    async with DatabaseConnection() as conn:
+        repo = MediaRepository(conn)
+        media = await repo.find_by_identifier(media_id)
+
+        if not media:
+            return None
+
+        if not user.is_admin and media.user_id != user.id:
+            return None
+
+        if "name" in updates and updates["name"]:
+            media.name = updates["name"][:100]
+
+        if "description" in updates:
+            try:
+                current_desc = json.loads(media.description) if media.description else {}
+                current_desc["written_description"] = updates["description"]
+                media.description = json.dumps(current_desc, ensure_ascii=False)
+            except Exception:
+                pass
+
+        await conn.commit()
+        await conn.refresh(media)
+        
+        return _serialize(media)
+
+
 async def list_user_media(user: User) -> list[dict[str, Any]]:
     async with DatabaseConnection() as conn:
         medias = await MediaRepository(conn).find_by_user(user.id)
