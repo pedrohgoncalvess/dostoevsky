@@ -12,23 +12,27 @@ class MessageRepository(Interface[Message]):
         self,
         interaction_id: int,
         sent_by: str,
-        content: str,
+        content: str | None = None,
         media_id: int | None = None,
         tip: str | None = None,
+        correction: str | None = None,
     ) -> Message:
         return await self.insert(
             Message(
                 interaction_id=interaction_id,
-                media_id=media_id,
                 sent_by=sent_by,
                 content=content,
+                media_id=media_id,
                 tip=tip,
+                correction=correction,
             )
         )
 
     async def find_by_interaction_id(self, interaction_id: int) -> list[Message]:
+        from sqlalchemy.orm import selectinload
         result = await self.db.execute(
             select(self.model)
+            .options(selectinload(self.model.media))
             .where(self.model.interaction_id == interaction_id)
             .order_by(self.model.id)
         )

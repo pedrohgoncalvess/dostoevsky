@@ -18,6 +18,7 @@ class Message(Base):
     sent_by = Column(String(10), nullable=False)
     content = Column(Text, nullable=True)
     tip = Column(Text, nullable=True)
+    correction = Column(Text, nullable=True)
     inserted_at = Column(DateTime, nullable=False, default=func.now())
 
     interaction = relationship("Interaction", back_populates="messages")

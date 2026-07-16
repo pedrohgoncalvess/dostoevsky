@@ -1,12 +1,12 @@
 - describer:
-  model_id: qwen/qwen3.5-flash-02-23
-  prompt_path: agents/describer/prompt.md
-  output_path: agents/describer/output.json
-  placeholders: ["NOW"]
-  description: ""
+    model_id: qwen/qwen3.5-flash-02-23
+    prompt_path: agents/describer/prompt.md
+    output_path: agents/describer/output.json
+    placeholders: ["NOW"]
+    description: ""
 - teacher:
-  model_id: qwen/qwen3.5-flash-02-23
-  prompt_path: agents/teacher/prompt.md
-  output_path: agents/teacher/output.json
-  placeholders: ["NOW", "PROFILE", "FILES", "NATIVE_LANGUAGE", "STUDY_LANGUAGE"]
-  description: ""
+    model_id: qwen/qwen3.5-flash-02-23
+    prompt_path: agents/teacher/prompt.md
+    output_path: agents/teacher/output.json
+    placeholders: ["NOW", "PROFILE", "FILES", "NATIVE_LANGUAGE", "STUDY_LANGUAGE"]
+    description: ""

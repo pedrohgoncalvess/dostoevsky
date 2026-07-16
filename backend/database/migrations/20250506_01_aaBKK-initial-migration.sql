@@ -356,6 +356,7 @@ CREATE TABLE "content"."message"(
     sent_by VARCHAR(10) NOT NULL,
     content TEXT,
     tip TEXT,
+    correction TEXT,
 
     inserted_at TIMESTAMP NOT NULL,
 

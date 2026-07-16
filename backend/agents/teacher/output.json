@@ -10,13 +10,18 @@
           "type": "string",
           "description": "Natural, profile-aware reply in the study language. This is the message the student will hear and read."
         },
+        "correction": {
+          "type": "string",
+          "description": "Optional brief, friendly grammar or pronunciation correction of the user's last turn in their native language. Empty if none."
+        },
         "tip": {
           "type": "string",
-          "description": "Optional guidance to help the student answer next. Suggest useful words, phrases, structures, or a direction for the reply. Empty if nothing useful to add."
+          "description": "Optional guidance to help the student answer next. Explain in native language, give example in study language. Empty if none."
         }
       },
       "required": [
         "response",
+        "correction",
         "tip"
       ],
       "additionalProperties": false
