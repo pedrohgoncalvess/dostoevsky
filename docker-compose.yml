@@ -42,6 +42,7 @@ services:
     volumes:
       - media_data:/app/_s3
       - models_data:/app/models
+      - ./backend/log:/app/log
     networks:
       - dostoevsky
     depends_on:

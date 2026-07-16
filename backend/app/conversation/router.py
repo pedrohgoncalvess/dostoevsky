@@ -3,12 +3,13 @@ import base64
 import binascii
 import json
 import logging
+import time
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Any
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Body, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.services import ALGORITHM, SECRET_KEY, get_current_user
@@ -30,12 +31,13 @@ from database.operations.content import (
     MessageRepository,
     ProfileRepository,
 )
+from log import logger as struct_logger
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/conversation")
 
-# ── Default model IDs ─────────────────────────────────────────────────────────
+
 DEFAULT_CHAT_MODEL = "qwen/qwen3.5-flash-02-23"
 DEFAULT_PLANNING_MODEL = "deepseek/deepseek-r1"
 DEFAULT_STT_MODEL = "google/gemini-2.5-flash"
@@ -43,7 +45,7 @@ DEFAULT_TTS_MODEL = "canopylabs/orpheus-3b-0.1-ft"
 DEFAULT_TTS_VOICE = "tara"
 DEFAULT_TTS_FORMAT = "pcm"
 
-# ── Safety limits ─────────────────────────────────────────────────────────────
+
 # Maximum audio buffer size per WebSocket session (bytes). Clients that
 # stream more than this before committing will have their buffer cleared.
 MAX_AUDIO_BYTES = 10 * 1024 * 1024  # 10 MB
@@ -53,10 +55,16 @@ WS_IDLE_TIMEOUT = 120  # 2 minutes
 
 audio_factory = AudioProviderFactory()
 
+from dataclasses import dataclass
+
 SYSTEM_PROMPT = (
     "You are a concise language-learning conversation partner. "
     "Keep replies natural, short, and useful for spoken practice."
 )
+
+@dataclass
+class AudioTurnState:
+    user_message_id: int | None = None
 
 
 @router.websocket("/ws")
@@ -81,6 +89,10 @@ async def conversation_ws(websocket: WebSocket) -> None:
     language = websocket.query_params.get("language")
     paused = False
     audio_buffer = bytearray()
+    
+    processing_task: asyncio.Task | None = None
+    processing_audio = bytearray()
+    turn_state = AudioTurnState()
 
     await websocket.send_json(
         {
@@ -110,6 +122,12 @@ async def conversation_ws(websocket: WebSocket) -> None:
             if message.get("bytes") is not None:
                 if not paused:
                     chunk: bytes = message["bytes"]
+                    if processing_task and not processing_task.done():
+                        processing_task.cancel()
+                        audio_buffer = processing_audio + audio_buffer
+                        processing_audio = bytearray()
+                        await websocket.send_json({"type": "processing_cancelled"})
+
                     if len(audio_buffer) + len(chunk) > MAX_AUDIO_BYTES:
                         await websocket.send_json(
                             {"type": "error", "detail": "Audio buffer limit exceeded."}
@@ -130,6 +148,12 @@ async def conversation_ws(websocket: WebSocket) -> None:
                     try:
                         chunk = _decode_audio_payload(payload)
                         if chunk:
+                            if processing_task and not processing_task.done():
+                                processing_task.cancel()
+                                audio_buffer = processing_audio + audio_buffer
+                                processing_audio = bytearray()
+                                await websocket.send_json({"type": "processing_cancelled"})
+
                             if len(audio_buffer) + len(chunk) > MAX_AUDIO_BYTES:
                                 await websocket.send_json(
                                     {"type": "error", "detail": "Audio buffer limit exceeded."}
@@ -173,17 +197,24 @@ async def conversation_ws(websocket: WebSocket) -> None:
 
                 commit_format = payload.get("audio_format") or audio_format
                 commit_language = payload.get("language") or language
-                current_audio = bytes(audio_buffer)
+                
+                if processing_task and not processing_task.done():
+                    processing_task.cancel()
+                    
+                processing_audio = bytearray(audio_buffer)
                 audio_buffer.clear()
 
-                await _process_audio_turn(
-                    websocket=websocket,
-                    user=user,
-                    interaction_id=interaction.id,
-                    interaction=interaction,
-                    audio=current_audio,
-                    audio_format=commit_format,
-                    language=commit_language,
+                processing_task = asyncio.create_task(
+                    _process_audio_turn(
+                        websocket=websocket,
+                        user=user,
+                        interaction_id=interaction.id,
+                        interaction=interaction,
+                        audio=bytes(processing_audio),
+                        audio_format=commit_format,
+                        language=commit_language,
+                        state=turn_state,
+                    )
                 )
                 continue
 
@@ -235,22 +266,27 @@ async def _process_audio_turn(
     audio: bytes,
     audio_format: str,
     language: str | None,
+    state: AudioTurnState,
 ) -> None:
     if not audio:
         await websocket.send_json({"type": "error", "detail": "No audio received before commit."})
         return
 
-    # ── Noise detection before any disk/DB write ──────────────────────────────
+    turn_start_time = time.perf_counter()
+
+
+    vad_start = time.perf_counter()
     noise = analyze_noise(audio, audio_format)
+    vad_time = time.perf_counter() - vad_start
 
     if noise.get("is_noise"):
         await websocket.send_json({"type": "noise_detected", "noise": noise})
         # Save a lightweight record only for diagnostic purposes — no media file.
         async with DatabaseConnection() as conn:
-            await _save_message(conn, interaction_id, "user", "", None, "noise_detected")
+            await _save_message(conn, interaction_id, "user", "", None, "noise_detected", "")
         return
 
-    # ── Save user audio to disk and DB ────────────────────────────────────────
+
     async with DatabaseConnection() as conn:
         media = await _save_media_record(
             conn,
@@ -265,7 +301,7 @@ async def _process_audio_turn(
 
     await websocket.send_json({"type": "user_audio_saved", "media_id": media.id, "noise": noise})
 
-    # ── STT ───────────────────────────────────────────────────────────────────
+
     tts_format = DEFAULT_TTS_FORMAT
 
     try:
@@ -273,7 +309,9 @@ async def _process_audio_turn(
             stt_model, tts_model, tts_voice = await _resolve_audio_models(conn, user.id)
 
         stt_provider = audio_factory.stt_provider(stt_model)
+        stt_start = time.perf_counter()
         transcription = await stt_provider.transcribe(audio, audio_format, language)
+        stt_time = time.perf_counter() - stt_start
     except Exception as exc:
         logger.exception("STT failed for interaction %s", interaction_id)
         await websocket.send_json({"type": "error", "detail": f"STT failed: {exc}"})
@@ -281,7 +319,16 @@ async def _process_audio_turn(
 
     async with DatabaseConnection() as conn:
         await _update_media_transcription(conn, media.id, transcription)
-        await _save_message(conn, interaction_id, "user", transcription, media.id, None)
+        
+        if state.user_message_id:
+            await MessageRepository(conn).update(
+                state.user_message_id,
+                {"content": transcription, "media_id": media.id}
+            )
+        else:
+            msg = await _save_message(conn, interaction_id, "user", transcription, media.id, None, "")
+            state.user_message_id = msg.id
+            
         history, _interaction = await _build_teacher_history(conn, interaction_id)
 
     await websocket.send_json(
@@ -296,16 +343,21 @@ async def _process_audio_turn(
         await websocket.send_json({"type": "no_speech_detected", "media_id": media.id})
         return
 
-    # ── LLM + TTS ─────────────────────────────────────────────────────────────
+
     try:
         async with OpenRouterClient() as client:
-            assistant_text, tip = await _call_teacher(client, history, interaction_id)
+            llm_start = time.perf_counter()
+            assistant_text, tip, correction = await _call_teacher(client, history, interaction_id)
+            llm_time = time.perf_counter() - llm_start
+            
         if not assistant_text:
             await websocket.send_json({"type": "error", "detail": "Empty teacher response."})
             return
 
         tts_provider = audio_factory.tts_provider(tts_model, tts_voice)
+        tts_start = time.perf_counter()
         assistant_audio = await tts_provider.speech(assistant_text, tts_voice, tts_format)
+        tts_time = time.perf_counter() - tts_start
     except OpenRouterError as exc:
         logger.error("LLM/TTS OpenRouter error for interaction %s: %s", interaction_id, exc)
         await websocket.send_json({"type": "error", "detail": f"Teacher/TTS failed: {exc}"})
@@ -333,7 +385,15 @@ async def _process_audio_turn(
             assistant_text,
             assistant_media.id,
             tip,
+            correction,
         )
+
+    total_time = time.perf_counter() - turn_start_time
+    await struct_logger.info(
+        module="conversation.router",
+        info_type="ProcessingTimes",
+        message=f"VAD={vad_time:.2f}s, STT={stt_time:.2f}s, LLM={llm_time:.2f}s, TTS={tts_time:.2f}s (Total = {total_time:.2f}s)"
+    )
 
     out: dict[str, Any] = {
         "type": "assistant_message",
@@ -348,10 +408,15 @@ async def _process_audio_turn(
     }
     if interaction and interaction.need_tip:
         out["tip"] = tip
+    if correction:
+        out["correction"] = correction
 
     await websocket.send_json(out)
     await websocket.send_bytes(assistant_audio)
     await websocket.send_json({"type": "assistant_audio_end", "media_id": assistant_media.id})
+
+    # Reset state for the next turn
+    state.user_message_id = None
 
 
 def _extract_token(websocket: WebSocket) -> str | None:
@@ -472,6 +537,7 @@ async def _save_message(
     content: str,
     media_id: int | None,
     tip: str | None,
+    correction: str | None,
 ) -> Message:
     return await MessageRepository(conn).create_message(
         interaction_id=interaction_id,
@@ -479,6 +545,7 @@ async def _save_message(
         content=content,
         media_id=media_id,
         tip=tip,
+        correction=correction,
     )
 
 
@@ -553,8 +620,8 @@ async def _call_teacher(
     client: OpenRouterClient,
     history: list[dict[str, str]],
     interaction_id: int,
-) -> tuple[str, str]:
-    """Call the teacher LLM and return (response_text, tip).
+) -> tuple[str, str, str]:
+    """Call the teacher LLM and return (response_text, tip, correction).
 
     DB errors and OpenRouter errors are kept separate so callers can
     distinguish between infrastructure failures and API failures.
@@ -563,12 +630,12 @@ async def _call_teacher(
         agent = await AgentRepository(conn).find_by_name("teacher")
         if not agent:
             text = await client.chat(history, DEFAULT_CHAT_MODEL, session_id=str(interaction_id))
-            return text, ""
+            return text, "", ""
 
         model = await ModelRepository(conn).find_by_id(agent.model_id)
         if not model:
             text = await client.chat(history, DEFAULT_CHAT_MODEL, session_id=str(interaction_id))
-            return text, ""
+            return text, "", ""
 
         json_schema = agent.structured_output or {}
         model_id = model.external_id
@@ -584,9 +651,9 @@ async def _call_teacher(
     except OpenRouterError:
         # Structured output failed — fall back to plain chat.
         text = await client.chat(history, model_id, session_id=str(interaction_id))
-        return text, ""
+        return text, "", ""
 
-    return result.get("response", ""), result.get("tip", "")
+    return result.get("response", ""), result.get("tip", ""), result.get("correction", "")
 
 
 def _loads_json(text: str) -> dict[str, Any]:
@@ -609,7 +676,7 @@ def _decode_audio_payload(payload: dict[str, Any]) -> bytes:
         raise ValueError("Invalid base64 audio payload.") from exc
 
 
-# ── REST endpoints ────────────────────────────────────────────────────────────
+
 
 @router.post("/interactions")
 async def create_interaction(
@@ -640,10 +707,10 @@ async def create_interaction(
     return {
         "id": interaction.id,
         "public_id": str(interaction.public_id),
-        "name": interaction.name,
+        "name": interaction.name.replace("_", " ").title(),
         "profile_id": interaction.profile_id,
         "profile_public_id": str(profile.public_id),
-        "profile_name": profile.name,
+        "profile_name": profile.name.replace("_", " ").title(),
         "study_plan_id": interaction.study_plan_id,
         "study_plan_public_id": str(study_plan.public_id),
         "need_tip": interaction.need_tip,
@@ -657,22 +724,97 @@ async def list_interactions(
     user: User = Depends(get_current_user),
 ):
     async with DatabaseConnection() as conn:
-        # Sort and limit are applied in SQL, not in Python.
         interactions = await InteractionRepository(conn).find_recent_by_user(
             user_id=user.id, limit=limit
         )
+
+        from sqlalchemy import select
+        from database.models.content import InteractionMedia, Media
+
+        # Fetch all media links for these interactions
+        interaction_ids = [i.id for i in interactions]
+        media_map: dict[int, list[str]] = {i.id: [] for i in interactions}
+        
+        if interaction_ids:
+            result = await conn.execute(
+                select(InteractionMedia.interaction_id, Media.public_id)
+                .join(Media, Media.id == InteractionMedia.media_id)
+                .where(InteractionMedia.interaction_id.in_(interaction_ids))
+            )
+            for row in result.all():
+                media_map[row.interaction_id].append(str(row.public_id))
 
     return [
         {
             "id": i.id,
             "public_id": str(i.public_id),
-            "name": i.name,
+            "name": i.name.replace("_", " ").title(),
             "profile_id": i.profile_id,
             "need_tip": i.need_tip,
+            "media_ids": media_map[i.id],
             "inserted_at": i.inserted_at.isoformat() if i.inserted_at else None,
         }
         for i in interactions
     ]
+
+
+@router.patch("/interactions/{interaction_id}")
+async def update_interaction(
+	interaction_id: str,
+	payload: dict[str, Any] = Body(...),
+	user: User = Depends(get_current_user),
+):
+	async with DatabaseConnection() as conn:
+		interaction = await InteractionRepository(conn).find_for_user_by_identifier(interaction_id, user.id)
+		if not interaction:
+			raise HTTPException(status_code=404, detail="Interaction not found")
+
+		update_data = {}
+		if "name" in payload:
+			update_data["name"] = payload["name"]
+		if "need_tip" in payload:
+			update_data["need_tip"] = payload["need_tip"]
+
+		if update_data:
+			await InteractionRepository(conn).update(interaction.id, update_data)
+
+		if "media_ids" in payload:
+			from sqlalchemy import delete
+			from database.models.content import InteractionMedia
+			
+			# Remove old media links
+			await conn.execute(delete(InteractionMedia).where(InteractionMedia.interaction_id == interaction.id))
+			
+			# Add new ones
+			media_repo = InteractionMediaRepository(conn)
+			for m_id in payload["media_ids"]:
+				try:
+					from database.operations.content.media import MediaRepository
+					media_obj = await MediaRepository(conn).find_for_user_by_identifier(m_id, user.id)
+					if media_obj:
+						await media_repo.create_link(interaction.id, media_obj.id)
+				except Exception:
+					pass
+
+		await conn.commit()
+
+	return {"status": "ok"}
+
+
+@router.delete("/interactions/{interaction_id}")
+async def delete_interaction(
+	interaction_id: str,
+	user: User = Depends(get_current_user),
+):
+	async with DatabaseConnection() as conn:
+		interaction = await InteractionRepository(conn).find_for_user_by_identifier(interaction_id, user.id)
+		if not interaction:
+			raise HTTPException(status_code=404, detail="Interaction not found")
+
+		await InteractionRepository(conn).delete(interaction.id)
+		await conn.commit()
+
+	return {"status": "ok"}
 
 
 @router.get("/interactions/{interaction_id}/messages")
@@ -699,6 +841,8 @@ async def list_messages(
             "sent_by": m.sent_by,
             "content": m.content,
             "tip": m.tip,
+            "correction": m.correction,
+            "media_id": str(m.media.public_id) if m.media else None,
             "inserted_at": m.inserted_at.isoformat() if m.inserted_at else None,
         }
         for m in messages
@@ -728,13 +872,13 @@ async def create_text_message(
                 detail="Interaction not found.",
             )
 
-        await _save_message(conn, interaction.id, "user", text, None, None)
+        await _save_message(conn, interaction.id, "user", text, None, None, "")
         history, _ = await _build_teacher_history(conn, interaction.id)
         send_tip = interaction.need_tip
 
     try:
         async with OpenRouterClient() as client:
-            assistant_text, tip = await _call_teacher(client, history, interaction.id)
+            assistant_text, tip, correction = await _call_teacher(client, history, interaction.id)
     except OpenRouterError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -749,6 +893,7 @@ async def create_text_message(
             assistant_text,
             None,
             tip,
+            correction,
         )
 
     response: dict[str, Any] = {

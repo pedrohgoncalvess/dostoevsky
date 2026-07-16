@@ -4,7 +4,7 @@ import wave
 
 from utils import get_env_var
 
-# ── Configurable VAD thresholds (override via environment) ───────────────────
+
 # AUDIO_MIN_DURATION_MS  — discard clips shorter than this (default: 250 ms)
 # AUDIO_MIN_RMS          — discard clips with RMS energy below this (default: 200)
 # AUDIO_MIN_PEAK         — discard clips whose peak amplitude is below this (default: 800)

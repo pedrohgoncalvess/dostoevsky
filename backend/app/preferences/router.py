@@ -15,7 +15,7 @@ from database.operations.conf import UserPreferenceRepository
 router = APIRouter(prefix="/preferences", tags=["preferences"])
 
 
-# ── helpers ───────────────────────────────────────────────────────────────────
+
 
 
 def _model_summary(model: Model) -> dict[str, Any]:
@@ -54,7 +54,7 @@ def _voice_item(voice: Voice) -> dict[str, Any]:
     }
 
 
-# ── GET /preferences ──────────────────────────────────────────────────────────
+
 
 
 @router.get("")
@@ -95,7 +95,7 @@ async def get_preferences(
         }
 
 
-# ── PATCH /preferences ────────────────────────────────────────────────────────
+
 
 
 @router.patch("")
@@ -148,7 +148,7 @@ async def update_preferences(
     return {"ok": True}
 
 
-# ── GET /preferences/models ───────────────────────────────────────────────────
+
 
 
 @router.get("/models")
@@ -180,7 +180,7 @@ async def list_models(
     }
 
 
-# ── GET /preferences/voices ───────────────────────────────────────────────────
+
 
 
 @router.get("/voices")
@@ -199,7 +199,7 @@ async def list_voices(
     return [_voice_item(v) for v in voices]
 
 
-# ── GET /preferences/agents ───────────────────────────────────────────────────
+
 
 
 @router.get("/agents")
@@ -235,7 +235,7 @@ async def list_agents(
     return result
 
 
-# ── PATCH /preferences/agents/{agent_name} ────────────────────────────────────
+
 
 
 @router.patch("/agents/{agent_name}")
@@ -268,7 +268,7 @@ async def update_agent_model(
     return {"status": "ok"}
 
 
-# ── POST /preferences/audio-models/download ───────────────────────────────────
+
 
 
 @router.post("/audio-models/download")
