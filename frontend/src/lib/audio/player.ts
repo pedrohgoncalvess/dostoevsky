@@ -19,7 +19,11 @@ export class AudioPlayer {
 		const source = this.audioContext.createBufferSource();
 		source.buffer = audioBuffer;
 		source.connect(this.audioContext.destination);
-		source.start();
+
+		return new Promise((resolve) => {
+			source.onended = () => resolve();
+			source.start();
+		});
 	}
 
 	close(): void {

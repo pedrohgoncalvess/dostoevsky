@@ -19,13 +19,14 @@ type AudioEvent =
 	| { type: 'noise_detected' }
 	| { type: 'user_transcription'; text: string }
 	| { type: 'no_speech_detected' }
-	| { type: 'assistant_message'; text: string }
-	| { type: 'assistant_audio_end' };
+	| { type: 'assistant_message'; text: string; tip?: string; correction?: string }
+	| { type: 'assistant_audio_end' }
+	| { type: 'processing_cancelled' };
 
 interface AudioConversationCallbacks {
 	onStatusChange?: (status: AudioStatus) => void;
 	onUserTranscription?: (text: string) => void;
-	onAssistantMessage?: (text: string) => void;
+	onAssistantMessage?: (text: string, tip: string | null, correction: string | null) => void;
 	onError?: (message: string) => void;
 	onVolumeChange?: (volume: number) => void;
 }
@@ -40,6 +41,7 @@ export class AudioConversation {
 	private pendingAudio: Uint8Array[] = [];
 	private closing = false;
 	private manuallyPaused = false;
+	private isSpeaking = false;
 
 	constructor(interactionId: string, callbacks: AudioConversationCallbacks = {}) {
 		this.interactionId = interactionId;
@@ -51,9 +53,19 @@ export class AudioConversation {
 			silenceTimeoutMs: 1_800,
 			minDurationMs: 800,
 			callbacks: {
-				onChunk: (chunk) => this.ws?.send(chunk),
+				onChunk: (chunk) => {
+					if (this.status === 'recording' || (this.status === 'processing' && this.isSpeaking)) {
+						this.ws?.send(chunk);
+					}
+				},
 				onVolumeChange: (volume) => this.callbacks.onVolumeChange?.(volume),
-				onSilence: () => this.stopRecording()
+				onSilence: () => {
+					this.isSpeaking = false;
+					this.stopRecording();
+				},
+				onSpeechStart: () => {
+					this.isSpeaking = true;
+				}
 			}
 		});
 	}
@@ -98,9 +110,12 @@ export class AudioConversation {
 	}
 
 	startRecording(manual = false): void {
-		if (this.recorder.recording) return;
 		if (manual) {
 			this.manuallyPaused = false;
+		}
+		if (this.recorder.recording) {
+			this.setStatus('recording');
+			return;
 		}
 		void this._startRecording();
 	}
@@ -112,6 +127,7 @@ export class AudioConversation {
 		}
 
 		this.pendingAudio = [];
+		this.isSpeaking = false;
 		await this.recorder.start();
 		this.setStatus('recording');
 	}
@@ -120,10 +136,39 @@ export class AudioConversation {
 		if (!this.recorder.recording) return;
 		if (manual) {
 			this.manuallyPaused = true;
+			this.recorder.stop();
+			if (this.status === 'processing' || this.status === 'playing') {
+				this.setStatus('connected');
+				return;
+			}
 		}
-		this.recorder.stop();
 		this.setStatus('processing');
 		this.ws?.send(JSON.stringify({ type: 'commit', audio_format: 'pcm' }));
+	}
+
+	/** Mute: stop capturing the mic without closing the WS or committing audio. */
+	muteMic(): void {
+		if (!this.recorder.recording) return;
+		this.manuallyPaused = true;
+		this.recorder.stop();
+		// Only change status if we're still in recording state (not processing/playing)
+		if (this.status === 'recording') {
+			this.setStatus('connected');
+		}
+	}
+
+	/** Unmute: restart capturing the mic (WS must already be open). */
+	unmuteMic(): void {
+		this.manuallyPaused = false;
+		if (this.recorder.recording) {
+			this.setStatus('recording');
+			return;
+		}
+		void this._startRecording();
+	}
+
+	get muted(): boolean {
+		return this.manuallyPaused;
 	}
 
 	toggleRecording(): void {
@@ -146,18 +191,22 @@ export class AudioConversation {
 			case 'ready':
 				this.setStatus('connected');
 				break;
+            case 'processing_cancelled':
+                this.setStatus('recording');
+                break;
 			case 'user_transcription':
 				this.callbacks.onUserTranscription?.(event.text);
 				break;
 			case 'assistant_message':
-				this.callbacks.onAssistantMessage?.(event.text);
+				this.callbacks.onAssistantMessage?.(event.text, event.tip ?? null, event.correction ?? null);
 				this.setStatus('playing');
 				break;
 			case 'assistant_audio_end':
 				await this.playPendingAudio();
-				this.setStatus('connected');
 				if (!this.manuallyPaused) {
-					setTimeout(() => this.startRecording(), 400);
+					this.setStatus('recording');
+				} else {
+					this.setStatus('connected');
 				}
 				break;
 			case 'noise_detected':

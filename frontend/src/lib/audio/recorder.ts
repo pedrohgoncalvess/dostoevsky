@@ -2,6 +2,7 @@ export interface RecorderCallbacks {
 	onChunk?: (chunk: ArrayBuffer) => void;
 	onVolumeChange?: (volume: number) => void;
 	onSilence?: () => void;
+	onSpeechStart?: () => void;
 }
 
 export interface RecorderOptions {
@@ -36,6 +37,7 @@ export class AudioRecorder {
 	private minDurationMs: number;
 	private startTime = 0;
 	private animationFrameId: number | null = null;
+	private wasSpeaking = false;
 
 	constructor(options: RecorderOptions = {}) {
 		this.options = options;
@@ -60,10 +62,12 @@ export class AudioRecorder {
 			const input = event.inputBuffer.getChannelData(0);
 			const int16 = float32ToInt16(input);
 			this.chunks.push(int16);
+            
+			this.updateSilence(int16);
+
 			this.options.callbacks?.onChunk?.(
 				int16.buffer.slice(int16.byteOffset, int16.byteOffset + int16.byteLength) as ArrayBuffer
 			);
-			this.updateSilence(int16);
 		};
 
 		this.source.connect(this.analyser);
@@ -72,6 +76,7 @@ export class AudioRecorder {
 
 		this.startTime = performance.now();
 		this.silenceSamples = 0;
+		this.wasSpeaking = false;
 		this.isRecording = true;
 		this.startVolumeLoop();
 	}
@@ -116,6 +121,10 @@ export class AudioRecorder {
 
 		if (!isSilent) {
 			this.silenceSamples = 0;
+			if (!this.wasSpeaking) {
+				this.wasSpeaking = true;
+				this.options.callbacks?.onSpeechStart?.();
+			}
 			return;
 		}
 
@@ -124,7 +133,10 @@ export class AudioRecorder {
 		const durationMs = performance.now() - this.startTime;
 
 		if (silenceMs >= this.silenceTimeoutMs && durationMs >= this.minDurationMs) {
-			this.options.callbacks?.onSilence?.();
+			if (this.wasSpeaking) {
+				this.wasSpeaking = false;
+				this.options.callbacks?.onSilence?.();
+			}
 		}
 	}
 

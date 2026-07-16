@@ -27,16 +27,25 @@ export interface Interaction {
 
 export interface Message {
 	id: string;
-	sent_by: 'user' | 'assistant' | string;
-	content: string | null;
-	tip: string | null;
+	sent_by: 'user' | 'assistant';
+	content: string;
+	tip?: string;
+	correction?: string;
 	inserted_at: string;
 }
 
+export interface MediaDescription {
+	written_description?: string;
+	extracted_text?: string;
+	[key: string]: any;
+}
+
 export interface Media {
-	id: string;
+	id: string; // This corresponds to public_id in backend
 	name: string;
-	description: string;
+	description: MediaDescription | null;
+	format?: string;
+	inserted_at?: string;
 }
 
 export type Language = 'portuguese' | 'english' | 'french' | 'spanish' | 'russian' | 'mandarim';

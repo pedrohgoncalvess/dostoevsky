@@ -9,35 +9,19 @@
 		listMessages,
 		listProfiles,
 		listStudyPlans,
+		listMedias,
 		sendTextMessage
 	} from '$lib/api';
 	import { isAuthenticated } from '$lib/auth';
 	import { t } from '$lib/i18n';
 	import { AudioConversation, type AudioStatus } from '$lib/audio/conversation';
 	import NewConversationModal from '$lib/components/NewConversationModal.svelte';
+	import InteractionSettingsModal from '$lib/components/InteractionSettingsModal.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
 	import VoiceVisualizer from '$lib/components/VoiceVisualizer.svelte';
 	import Waveform from '$lib/components/Waveform.svelte';
 	import type { ChatStatus, Interaction, Media, Message, Profile, StudyPlan } from '$lib/types';
-
-	const mockMedias: Media[] = [
-		{
-			id: 'media-1',
-			name: 'Business English Phrases',
-			description: 'Common phrases for professional meetings and emails.'
-		},
-		{
-			id: 'media-2',
-			name: 'Travel Spanish Vocabulary',
-			description: 'Essential words and expressions for traveling.'
-		},
-		{
-			id: 'media-3',
-			name: 'Job Interview Tips',
-			description: 'Questions and answers to practice for interviews.'
-		}
-	];
 
 	const interactionId = $derived(page.url.searchParams.get('id'));
 
@@ -47,6 +31,7 @@
 	);
 	let profiles = $state<Profile[]>([]);
 	let studyPlans = $state<StudyPlan[]>([]);
+	let medias = $state<Media[]>([]);
 	let messages = $state<Message[]>([]);
 	let status = $state<ChatStatus>('idle');
 	let inputText = $state('');
@@ -56,11 +41,17 @@
 	let transcriptContainer = $state<HTMLDivElement | null>(null);
 	let audioConversation = $state<AudioConversation | null>(null);
 	let audioStatus = $state<AudioStatus>('idle');
+	let creating = $state(false);
+
+	let modalOpen = $state(false);
+	let settingsModalOpen = $state(false);
+	let selectedInteractionForSettings = $state<Interaction | null>(null);
+
+	// Voice Chat State
 	let audioEnabled = $state(false);
 	let audioVolume = $state(0);
-	let modalOpen = $state(false);
-	let creating = $state(false);
 	let tempMessageCounter = 0;
+	let currentTurnTempId = $state<string | null>(null);
 
 	function nextTempId(): string {
 		return `temp-${++tempMessageCounter}`;
@@ -103,14 +94,16 @@
 
 	async function loadSidebarData() {
 		try {
-			const [interactionsData, profilesData, studyPlansData] = await Promise.all([
+			const [interactionsData, profilesData, studyPlansData, mediasData] = await Promise.all([
 				listInteractions(20),
 				listProfiles(),
-				listStudyPlans()
+				listStudyPlans(),
+				listMedias()
 			]);
 			interactions = interactionsData;
 			profiles = profilesData;
 			studyPlans = studyPlansData;
+			medias = mediasData;
 		} catch (err) {
 			error = err instanceof Error ? err.message : $t('conversation.loadError');
 		} finally {
@@ -200,22 +193,31 @@
 					}
 				},
 				onUserTranscription: (text) => {
-					appendMessage({
-						id: nextTempId(),
-						sent_by: 'user',
-						content: text,
-						tip: null,
-						inserted_at: new Date().toISOString()
-					});
+					if (!currentTurnTempId) currentTurnTempId = nextTempId();
+					
+					const existingIdx = messages.findIndex(m => m.id === currentTurnTempId);
+					if (existingIdx >= 0) {
+						messages[existingIdx] = { ...messages[existingIdx], content: text };
+					} else {
+						appendMessage({
+							id: currentTurnTempId,
+							sent_by: 'user',
+							content: text,
+							tip: null,
+							inserted_at: new Date().toISOString()
+						});
+					}
 				},
-				onAssistantMessage: (text) => {
+				onAssistantMessage: (text, tip, correction) => {
 					appendMessage({
 						id: nextTempId(),
 						sent_by: 'assistant',
 						content: text,
-						tip: null,
+						tip: tip || undefined,
+						correction: correction || undefined,
 						inserted_at: new Date().toISOString()
 					});
+					currentTurnTempId = null;
 				},
 				onError: (message) => {
 					error = message;
@@ -254,15 +256,40 @@
 		audioStatus = 'idle';
 	}
 
+	function handleMicToggle() {
+		if (!audioConversation) return;
+		if (audioStatus === 'recording') {
+			audioConversation.muteMic();
+		} else if (audioStatus === 'connected') {
+			audioConversation.unmuteMic();
+		}
+	}
+
+	function playAudio(mediaId: string | undefined) {
+		if (!mediaId) return;
+		
+		// If using SSR_API_BASE_URL vs VITE_API_BASE_URL, the front talks to the same domain using auth cookie.
+		// Wait, the API base url is import.meta.env.VITE_API_BASE_URL for client side fetches.
+		const url = `${import.meta.env.VITE_API_BASE_URL}/media/${mediaId}/file`;
+		
+		const audio = new window.Audio(url);
+		audio.play().catch(console.error);
+	}
+
 	function audioButtonLabel(): string {
-		if (audioStatus === 'recording') return $t('conversation.recording');
-		if (audioStatus === 'processing') return $t('conversation.processingAudio');
-		if (audioStatus === 'playing') return $t('conversation.playing');
+		if (audioEnabled) {
+			// Check if currently muted (not recording)
+			const isMuted = audioConversation?.muted ?? false;
+			if (isMuted || (!audioConversation?.muted && audioStatus !== 'recording')) {
+				return 'Unmute mic';
+			}
+			return 'Mute mic';
+		}
 		return $t('conversation.voiceChat');
 	}
 
 	function voiceChatActive(): boolean {
-		return audioEnabled && (audioStatus === 'idle' || audioStatus === 'connected');
+		return audioEnabled && audioStatus !== 'connected' && audioStatus !== 'idle';
 	}
 
 	function speakerName(sentBy: string): string {
@@ -280,22 +307,49 @@
 			return '';
 		}
 	}
+	
+	function handleSettingsSave(updatedInteraction: Interaction) {
+		interactions = interactions.map(i => i.id === updatedInteraction.id ? updatedInteraction : i);
+		settingsModalOpen = false;
+	}
+	
+	function handleSettingsDelete(id: string) {
+		interactions = interactions.filter(i => i.id !== id);
+		settingsModalOpen = false;
+		if (interactionId === id) {
+			goto('/conversation', { replaceState: true });
+		}
+	}
 </script>
 
 <div class="conversation" class:voice-active={audioEnabled}>
 	<Sidebar
 		{interactions}
 		onOpenNewConversation={() => (modalOpen = true)}
+		onOpenSettings={(interaction) => {
+			selectedInteractionForSettings = interaction;
+			settingsModalOpen = true;
+		}}
 	/>
 
 	{#if modalOpen}
 		<NewConversationModal
 			{profiles}
 			{studyPlans}
-			medias={mockMedias}
+			{medias}
 			loading={creating}
 			onStart={handleStartConversation}
 			onClose={() => (modalOpen = false)}
+		/>
+	{/if}
+	
+	{#if settingsModalOpen && selectedInteractionForSettings}
+		<InteractionSettingsModal
+			interaction={selectedInteractionForSettings}
+			{medias}
+			onSave={handleSettingsSave}
+			onDelete={handleSettingsDelete}
+			onClose={() => (settingsModalOpen = false)}
 		/>
 	{/if}
 
@@ -330,30 +384,71 @@
 							? $t('conversation.playing')
 							: $t('conversation.voiceChat')}
 			<div class="voice-stage">
-				<VoiceVisualizer status={audioStatus} volume={audioVolume} label={audioLabel} />
+				<div class="voice-transcript" bind:this={transcriptContainer}>
+					{#if messages.length === 0}
+						<p class="transcript-empty">{$t('conversation.transcriptEmpty')}</p>
+					{:else}
+						{#each messages as message (message.id)}
+							<div class="transcript-line {message.sent_by}" class:blurred={message.sent_by === 'assistant' && !currentInteraction?.need_tip}>
+								<span class="transcript-speaker">
+									{speakerName(message.sent_by)}
+									{#if message.media_id}
+										<button class="btn-play-audio" type="button" aria-label="Play audio" onclick={() => playAudio(message.media_id)}>
+											<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+										</button>
+									{/if}
+								</span>
+								{#if message.content}
+									<p class="transcript-text">{message.content}</p>
+								{/if}
+								{#if message.sent_by === 'assistant' && message.correction}
+									<div class="correction-block tip-block--sm">
+										<span class="correction-label">{$t('conversation.correctionLabel')}</span>
+										<p class="correction-text">{message.correction}</p>
+									</div>
+								{/if}
+								{#if currentInteraction?.need_tip && message.sent_by === 'assistant' && message.tip}
+									<div class="tip-block tip-block--sm">
+										<span class="tip-label">{$t('conversation.tipLabel')}</span>
+										<p class="tip-text">{message.tip}</p>
+									</div>
+								{/if}
+							</div>
+						{/each}
+					{/if}
+				</div>
 
-				<div class="voice-controls">
-					<button
-						class="btn-mic"
-						class:recording={audioStatus === 'recording'}
-						type="button"
-						disabled={!interactionId || status === 'processing'}
-						onclick={handleMicAction}
-						aria-pressed={voiceChatActive()}
-					>
-						{#if audioStatus === 'recording'}
-							<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-								<rect x="4" y="4" width="8" height="8" rx="1" fill="currentColor" />
-							</svg>
-							{$t('conversation.recording')}
-						{:else}
-							<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-								<rect x="5.5" y="2" width="5" height="8" rx="2.5" stroke="currentColor" stroke-width="1.4" />
-								<path d="M2.5 8a5.5 5.5 0 0011 0M8 13.5v2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
-							</svg>
-							{audioButtonLabel()}
+				<div class="voice-right">
+					<div class="visualizer-wrapper">
+						<VoiceVisualizer status={audioStatus} volume={audioVolume} label={audioLabel} />
+						{#if audioStatus === 'processing' || audioStatus === 'playing'}
+							<p class="processing-hint">{$t('conversation.stillListening')}</p>
 						{/if}
-					</button>
+					</div>
+
+					<div class="voice-controls">
+						<button
+							class="btn-mic"
+							class:recording={audioStatus === 'recording'}
+							type="button"
+							disabled={!interactionId}
+							onclick={handleMicToggle}
+							aria-pressed={audioStatus === 'recording'}
+						>
+							{#if audioStatus === 'recording'}
+								<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+									<rect x="4" y="4" width="8" height="8" rx="1" fill="currentColor" />
+								</svg>
+								Mute mic
+							{:else}
+								<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+									<rect x="5.5" y="2" width="5" height="8" rx="2.5" stroke="currentColor" stroke-width="1.4" />
+									<path d="M2.5 8a5.5 5.5 0 0011 0M8 13.5v2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+								</svg>
+								Unmute mic
+							{/if}
+						</button>
+					</div>
 				</div>
 			</div>
 		{:else}
@@ -378,12 +473,23 @@
 							<div class="line-speaker">
 								<span class="speaker-dot" aria-hidden="true"></span>
 								<span class="speaker-name">{speakerName(message.sent_by)}</span>
-								<span class="speaker-tag">{speakerTag(message.sent_by)}</span>
 								<span class="speaker-time">{formatTimestamp(message.inserted_at)}</span>
+								{#if message.media_id}
+									<button class="btn-play-audio" type="button" aria-label="Play audio" onclick={() => playAudio(message.media_id)}>
+										<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+									</button>
+								{/if}
 							</div>
 
 							{#if message.content}
 								<p class="utterance">{message.content}</p>
+							{/if}
+
+							{#if message.sent_by === 'assistant' && message.correction}
+								<div class="correction-block">
+									<span class="correction-label">{$t('conversation.correctionLabel')}</span>
+									<p class="correction-text">{message.correction}</p>
+								</div>
 							{/if}
 
 							{#if currentInteraction?.need_tip && message.sent_by === 'assistant' && message.tip}
@@ -424,7 +530,7 @@
 					class="composer-btn composer-btn--mic"
 					class:active={voiceChatActive()}
 					type="button"
-					disabled={!interactionId || status === 'processing'}
+					disabled={!interactionId || (status === 'processing' && !audioEnabled)}
 					onclick={handleMicAction}
 					aria-pressed={voiceChatActive()}
 					aria-label={audioButtonLabel()}
@@ -452,40 +558,10 @@
 			</form>
 		{/if}
 	</main>
-
-	{#if audioEnabled}
-		<aside class="transcript-panel">
-			<header class="transcript-header">
-				<p class="transcript-eyebrow">{$t('conversation.transcript')}</p>
-			</header>
-			<div class="transcript-body" bind:this={transcriptContainer}>
-				{#if messages.length === 0}
-					<p class="transcript-empty">{$t('conversation.transcriptEmpty')}</p>
-				{:else}
-					{#each messages as message (message.id)}
-						<div class="transcript-line {message.sent_by}">
-							<span class="transcript-speaker">{speakerName(message.sent_by)}</span>
-							{#if message.content}
-								<p class="transcript-text">{message.content}</p>
-							{/if}
-							{#if currentInteraction?.need_tip && message.sent_by === 'assistant' && message.tip}
-								<div class="tip-block tip-block--sm">
-									<span class="tip-label">{$t('conversation.tipLabel')}</span>
-									<p class="tip-text">{message.tip}</p>
-								</div>
-							{/if}
-						</div>
-					{/each}
-				{/if}
-			</div>
-		</aside>
-	{/if}
 </div>
 
 <style>
-	/* ================================================================
-	   LAYOUT
-	   ================================================================ */
+
 	.conversation {
 		display: grid;
 		grid-template-columns: 260px 1fr;
@@ -494,7 +570,7 @@
 	}
 
 	.conversation.voice-active {
-		grid-template-columns: 260px 1fr 300px;
+		grid-template-columns: 260px 1fr;
 	}
 
 	.main {
@@ -504,9 +580,7 @@
 		overflow: hidden;
 	}
 
-	/* ================================================================
-	   HEADER
-	   ================================================================ */
+
 	.header {
 		display: flex;
 		align-items: center;
@@ -569,9 +643,7 @@
 		color: var(--color-danger);
 	}
 
-	/* ================================================================
-	   LEDGER
-	   ================================================================ */
+
 	.ledger {
 		flex: 1;
 		overflow-y: auto;
@@ -605,9 +677,6 @@
 		max-width: 36ch;
 	}
 
-	/* ================================================================
-	   MESSAGE LINE
-	   ================================================================ */
 	.line {
 		display: flex;
 		flex-direction: column;
@@ -652,17 +721,32 @@
 		color: var(--color-voice-ai);
 	}
 
-	.speaker-tag {
+	.btn-play-audio {
+		background: none;
+		border: none;
+		padding: 4px;
+		margin-left: 4px;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 50%;
+		transition: background-color 0.2s, color 0.2s;
+	}
+
+	.btn-play-audio:hover {
+		background-color: var(--color-bg-inset);
+		color: var(--color-accent);
+	}
+
+	.speaker-time {
 		font: 400 0.6875rem var(--font-mono);
 		color: var(--color-text-muted);
 		background: var(--color-bg-inset);
 		padding: 1px 5px;
 		border-radius: var(--radius-sm);
 		border: 1px solid var(--color-border);
-	}
-
-	.speaker-time {
-		font: 400 0.6875rem var(--font-mono);
 		color: var(--color-text-muted);
 		opacity: 0.6;
 		margin-left: auto;
@@ -675,11 +759,8 @@
 		max-width: 56ch;
 	}
 
-	/* ================================================================
-	   TIP BLOCK
-	   ================================================================ */
 	.tip-block {
-		margin-top: var(--space-1);
+		margin-top: var(--space-2);
 		padding: var(--space-3) var(--space-4);
 		background: rgba(200, 155, 60, 0.05);
 		border-left: 2px solid var(--color-accent);
@@ -708,10 +789,61 @@
 		padding: var(--space-2) var(--space-3);
 	}
 
-	/* ================================================================
-	   VOICE STAGE
-	   ================================================================ */
+	.correction-block {
+		margin-top: var(--space-2);
+		padding: var(--space-3) var(--space-4);
+		background: rgba(180, 80, 80, 0.05);
+		border-left: 2px solid var(--raw-oxblood-500);
+		border-radius: 0 var(--radius-md) var(--radius-md) 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+	}
+
+	.correction-label {
+		display: block;
+		font: 700 0.6125rem var(--font-body);
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		color: var(--raw-oxblood-500);
+	}
+
+	.correction-text {
+		font: var(--text-body-sm);
+		color: var(--color-text-secondary);
+		margin: 0;
+		line-height: 1.55;
+	}
+
+
 	.voice-stage {
+		flex: 1;
+		display: flex;
+		flex-direction: row;
+		align-items: stretch;
+		gap: 0;
+		overflow: hidden;
+		background: var(--color-bg);
+		background-image: radial-gradient(
+			ellipse at 50% 50%,
+			rgba(79, 122, 108, 0.04) 0%,
+			transparent 70%
+		);
+	}
+
+	.voice-transcript {
+		width: 440px;
+		flex-shrink: 0;
+		border-right: 1px solid var(--color-border);
+		background: var(--color-bg-inset);
+		overflow-y: auto;
+		padding: var(--space-4);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
+	}
+
+	.voice-right {
 		flex: 1;
 		display: flex;
 		flex-direction: column;
@@ -719,12 +851,26 @@
 		justify-content: center;
 		gap: var(--space-7);
 		padding: var(--space-7) var(--space-6);
-		background: var(--color-bg);
-		background-image: radial-gradient(
-			ellipse at 50% 50%,
-			rgba(79, 122, 108, 0.04) 0%,
-			transparent 70%
-		);
+	}
+
+	.visualizer-wrapper {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: var(--space-2);
+		text-align: center;
+	}
+	
+	.processing-hint {
+		font: var(--text-caption);
+		color: var(--color-text-muted);
+		margin: 0;
+		animation: pulse-opacity 2s infinite ease-in-out;
+	}
+
+	@keyframes pulse-opacity {
+		0%, 100% { opacity: 0.6; }
+		50% { opacity: 1; }
 	}
 
 	.voice-controls {
@@ -782,9 +928,7 @@
 		flex-shrink: 0;
 	}
 
-	/* ================================================================
-	   COMPOSER
-	   ================================================================ */
+
 	.composer {
 		display: flex;
 		gap: var(--space-2);
@@ -875,39 +1019,7 @@
 		animation: spin 600ms linear infinite;
 	}
 
-	/* ================================================================
-	   TRANSCRIPT PANEL
-	   ================================================================ */
-	.transcript-panel {
-		display: flex;
-		flex-direction: column;
-		height: 100vh;
-		background: var(--color-bg-inset);
-		border-left: 1px solid var(--color-border);
-	}
 
-	.transcript-header {
-		padding: var(--space-4) var(--space-4) var(--space-3);
-		border-bottom: 1px solid var(--color-border);
-		flex-shrink: 0;
-	}
-
-	.transcript-eyebrow {
-		font: 500 0.6875rem var(--font-body);
-		letter-spacing: 0.12em;
-		text-transform: uppercase;
-		color: var(--color-text-muted);
-		margin: 0;
-	}
-
-	.transcript-body {
-		flex: 1;
-		overflow-y: auto;
-		padding: var(--space-4);
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-3);
-	}
 
 	.transcript-empty {
 		font: 400 italic 0.875rem var(--font-display);
@@ -924,6 +1036,13 @@
 		border-radius: var(--radius-md);
 		background: var(--color-surface);
 		border-left: 2px solid var(--color-border-strong);
+		transition: filter 0.3s ease;
+	}
+
+	.transcript-line.blurred {
+		filter: blur(4px);
+		user-select: none;
+		pointer-events: none;
 	}
 
 	.transcript-line.user {
