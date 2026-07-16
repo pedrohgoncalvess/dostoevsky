@@ -8,9 +8,10 @@
 	interface Props {
 		interactions: Interaction[];
 		onOpenNewConversation?: () => void;
+		onOpenSettings?: (interaction: Interaction) => void;
 	}
 
-	let { interactions, onOpenNewConversation }: Props = $props();
+	let { interactions, onOpenNewConversation, onOpenSettings }: Props = $props();
 
 	let searchQuery = $state('');
 	let settingsExpanded = $state(page.url.pathname.startsWith('/settings'));
@@ -66,6 +67,14 @@
 				{$t('sidebar.studyPlans')}
 			</button>
 
+			<button class="nav-item" class:active={page.url.pathname.startsWith('/medias')} onclick={() => goto('/medias')}>
+				<svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+					<path d="M13 13H1V1h8l4 4v8z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
+					<path d="M9 1v4h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
+				</svg>
+				{$t('sidebar.materials')}
+			</button>
+
 			<button class="nav-item nav-item--expandable" onclick={() => settingsExpanded = !settingsExpanded}>
 				<div class="nav-item__left">
 					<svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
@@ -109,7 +118,7 @@
 			{:else}
 				<ul class="history-list">
 					{#each filteredInteractions as interaction (interaction.id)}
-						<li>
+						<li class="history-item-container">
 							<button
 								class="history-item"
 								class:active={interaction.id === currentId}
@@ -123,6 +132,16 @@
 										? `${interaction.profile_name} · `
 										: ''}{formatDate(interaction.inserted_at)}
 								</span>
+							</button>
+							<button 
+								class="history-item-settings" 
+								aria-label="Settings" 
+								onclick={() => onOpenSettings?.(interaction)}
+							>
+								<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-settings">
+									<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
+									<circle cx="12" cy="12" r="3"></circle>
+								</svg>
 							</button>
 						</li>
 					{/each}
@@ -376,31 +395,61 @@
 		flex: 1;
 	}
 
-	.history-item {
+	.history-item-container {
+		display: flex;
+		align-items: stretch;
 		width: 100%;
-		padding: var(--space-2) var(--space-3);
+		border-left: 2px solid transparent;
+		border-radius: var(--radius-sm);
+		transition: border-left-color var(--duration-fast) var(--ease-standard),
+		            background var(--duration-fast) var(--ease-standard);
+	}
+	
+	.history-item-container:has(.history-item.active) {
+		border-left-color: var(--color-accent);
+		background: rgba(200, 155, 60, 0.06);
+	}
+	
+	.history-item-container:hover {
+		background: var(--color-surface);
+	}
+
+	.history-item {
+		flex: 1;
+		min-width: 0;
+		padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
 		background: transparent;
 		border: none;
-		border-left: 2px solid transparent;
-		border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 		color: var(--color-text-muted);
 		cursor: pointer;
 		text-align: left;
-		transition:
-			background var(--duration-fast) var(--ease-standard),
-			color var(--duration-fast) var(--ease-standard),
-			border-left-color var(--duration-fast) var(--ease-standard);
+		transition: color var(--duration-fast) var(--ease-standard);
 	}
 
-	.history-item:hover {
-		background: var(--color-surface);
+	.history-item-container:hover .history-item {
 		color: var(--color-text-primary);
 	}
 
 	.history-item.active {
-		border-left-color: var(--color-accent);
 		color: var(--color-text-primary);
-		background: rgba(200, 155, 60, 0.06);
+	}
+	
+	.history-item-settings {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		background: transparent;
+		border: none;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		opacity: 0.6;
+		transition: opacity var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
+	}
+	
+	.history-item-settings:hover {
+		opacity: 1;
+		color: var(--color-text-primary);
 	}
 
 	.history-item__name {

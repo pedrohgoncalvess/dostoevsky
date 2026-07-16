@@ -19,6 +19,9 @@
 
 	let { profiles, studyPlans, medias, loading = false, onStart, onClose }: Props = $props();
 
+	const AUDIO_FORMATS = new Set(['pcm', 'wav', 'mp3', 'ogg', 'flac', 'm4a', 'aac', 'opus', 'webm']);
+	const contextMedias = $derived(medias.filter(m => !m.format || !AUDIO_FORMATS.has(m.format.toLowerCase())));
+
 	let selectedProfileId = $state('');
 	let selectedStudyPlanId = $state('');
 	let selectedMediaIds = $state<string[]>([]);
@@ -43,7 +46,7 @@
 		}
 	}
 
-	let internalStudyPlans = $state(studyPlans);
+	let internalStudyPlans = $state<StudyPlan[]>([...studyPlans]);
 
 	$effect(() => {
 		internalStudyPlans = studyPlans;
@@ -122,12 +125,12 @@
 				{/if}
 			</label>
 
-			{#if medias.length > 0}
+			{#if contextMedias.length > 0}
 				<div class="field">
 					<span class="field-label">{$t('modal.mediaLabel')}</span>
 					<span class="field-hint">{$t('modal.mediaHint')}</span>
 					<div class="media-grid">
-						{#each medias as media (media.id)}
+						{#each contextMedias as media (media.id)}
 							<label class="media-card" class:selected={selectedMediaIds.includes(media.id)}>
 								<input
 									type="checkbox"
@@ -137,7 +140,7 @@
 									onchange={() => toggleMedia(media.id)}
 								/>
 								<span class="media-name">{media.name}</span>
-								<span class="media-desc">{media.description}</span>
+								<span class="media-desc">{media.description?.written_description || ''}</span>
 							</label>
 						{/each}
 					</div>

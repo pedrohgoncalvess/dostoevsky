@@ -6,7 +6,8 @@
 		createInteraction,
 		listInteractions,
 		listProfiles,
-		listStudyPlans
+		listStudyPlans,
+		listMedias
 	} from '$lib/api';
 	import { isAuthenticated } from '$lib/auth';
 	import { t, formatDate } from '$lib/i18n';
@@ -15,27 +16,10 @@
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import type { Interaction, Media, Profile, StudyPlan } from '$lib/types';
 
-	const mockMedias: Media[] = [
-		{
-			id: 'media-1',
-			name: 'Business English Phrases',
-			description: 'Common phrases for professional meetings and emails.'
-		},
-		{
-			id: 'media-2',
-			name: 'Travel Spanish Vocabulary',
-			description: 'Essential words and expressions for traveling.'
-		},
-		{
-			id: 'media-3',
-			name: 'Job Interview Tips',
-			description: 'Questions and answers to practice for interviews.'
-		}
-	];
-
 	let interactions = $state<Interaction[]>([]);
 	let profiles = $state<Profile[]>([]);
 	let studyPlans = $state<StudyPlan[]>([]);
+	let medias = $state<Media[]>([]);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let modalOpen = $state(false);
@@ -59,14 +43,16 @@
 
 	async function loadData() {
 		try {
-			const [interactionsData, profilesData, studyPlansData] = await Promise.all([
+			const [interactionsData, profilesData, studyPlansData, mediasData] = await Promise.all([
 				listInteractions(20),
 				listProfiles(),
-				listStudyPlans()
+				listStudyPlans(),
+				listMedias()
 			]);
 			interactions = interactionsData;
 			profiles = profilesData;
 			studyPlans = studyPlansData;
+			medias = mediasData;
 		} catch (err) {
 			error = err instanceof Error ? err.message : $t('dashboard.loadError');
 		} finally {
@@ -110,7 +96,7 @@
 		<NewConversationModal
 			{profiles}
 			{studyPlans}
-			medias={mockMedias}
+			{medias}
 			loading={creating}
 			onStart={handleStartConversation}
 			onClose={() => (modalOpen = false)}
